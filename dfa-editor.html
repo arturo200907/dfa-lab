@@ -1,0 +1,2502 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor de DFA — función de transición y export LaTeX</title>
+<style>
+  :root{
+    --bg:#12151c; --bg2:#1a1f2b; --bg3:#232a38; --line:#333c4d;
+    --fg:#e8ecf4; --fg2:#9aa6bd; --accent:#5b9dff; --accent2:#2f6fd0;
+    --ok:#3fb950; --warn:#d29922; --err:#f4526b;
+    --canvas:#ffffff; --ink:#101418; --ink2:#5a6674;
+    --mono:"Cascadia Code",Consolas,"SF Mono",Menlo,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    font:19.5px/1.5 "Segoe UI",Inter,system-ui,sans-serif;
+    background:var(--bg); color:var(--fg); overflow:hidden;
+  }
+  button{font:inherit;color:inherit;background:none;border:none;cursor:pointer}
+  input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 9px}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
+  ::-webkit-scrollbar{width:10px;height:10px}
+  ::-webkit-scrollbar-thumb{background:#3a4355;border-radius:6px}
+  ::-webkit-scrollbar-track{background:transparent}
+
+  /* ---------- layout ---------- */
+  #app{display:grid;grid-template-rows:auto 1fr;height:100%}
+  #main{display:grid;grid-template-columns:376px 1fr;min-height:0}
+  #right{display:grid;grid-template-rows:1fr auto auto;min-height:0;min-width:0}
+
+  /* ---------- toolbar ---------- */
+  #toolbar{
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;
+    padding:8px 12px;background:var(--bg2);border-bottom:1px solid var(--line);
+  }
+  #toolbar .brand{font-weight:700;font-size:20px;letter-spacing:.2px;margin-right:10px;white-space:nowrap}
+  #toolbar .brand span{color:var(--accent)}
+  .tbtn{
+    display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:7px;
+    background:var(--bg3);border:1px solid transparent;white-space:nowrap;
+  }
+  .tbtn:hover{background:#2c3446}
+  .tbtn.on{background:var(--accent2);border-color:var(--accent)}
+  .tbtn kbd{font:14px var(--mono);opacity:.6;background:rgba(0,0,0,.3);border-radius:3px;padding:0 5px}
+  .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+  .spacer{flex:1}
+
+  /* ---------- sidebar ---------- */
+  #side{background:var(--bg2);border-right:1px solid var(--line);overflow-y:auto;padding:14px}
+  .sec{margin-bottom:20px}
+  .sec>h3{
+    margin:0 0 10px;font-size:16.5px;text-transform:uppercase;letter-spacing:.09em;
+    color:var(--fg2);font-weight:700;display:flex;align-items:center;gap:6px
+  }
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;min-height:30px}
+  .chip{
+    display:inline-flex;align-items:center;gap:5px;background:var(--bg3);
+    border:1px solid var(--line);border-radius:6px;padding:4px 7px 4px 11px;
+    font:22px var(--mono)
+  }
+  .chip b{font-weight:600}
+  .chip .x{color:var(--fg2);font-size:24px;line-height:1;padding:0 4px;border-radius:3px}
+  .chip .x:hover{color:var(--err);background:rgba(244,82,107,.12)}
+  .empty{color:var(--fg2);font-style:italic;font-size:18px}
+  .row{display:flex;gap:6px}
+  .row input{flex:1;min-width:0}
+  .btn{background:var(--bg3);border:1px solid var(--line);border-radius:6px;padding:6px 12px}
+  .btn:hover{background:#2c3446}
+  .btn.primary{background:var(--accent2);border-color:var(--accent)}
+  .btn.primary:hover{background:#3a7fe0}
+  .btn.sm{padding:5px 11px;font-size:18px}
+  .hint{color:var(--fg2);font-size:17px;margin-top:8px}
+
+  /* ---------- paleta arrastrable ---------- */
+  .palette{display:flex;flex-direction:column;gap:7px}
+  .pitem{
+    display:flex;align-items:center;gap:11px;padding:8px 11px;border-radius:9px;
+    background:var(--bg3);border:1px dashed #46516a;cursor:grab;user-select:none
+  }
+  .pitem:hover{border-color:var(--accent);background:#2c3446}
+  .pitem:active{cursor:grabbing;transform:scale(.985)}
+  .pitem.dragging{opacity:.45}
+  .pitem .glyph{flex:none;width:46px;height:46px;display:grid;place-items:center}
+  .pitem .tx{min-width:0}
+  .pitem .tx b{display:block;font-size:19.5px;font-weight:600}
+  .pitem .tx small{display:block;color:var(--fg2);font-size:16px;line-height:1.35}
+  #canvasWrap.dropping{outline:3px dashed var(--accent);outline-offset:-6px}
+
+  #stateList{display:flex;flex-direction:column;gap:3px}
+  .srow{
+    display:flex;align-items:center;gap:6px;padding:5px 7px;border-radius:6px;
+    border:1px solid transparent
+  }
+  .srow:hover{background:var(--bg3)}
+  .srow.sel{background:var(--bg3);border-color:var(--accent)}
+  .srow .nm{flex:1;font:22px var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+  .srow .tg{
+    font-size:18px;padding:3px 9px;border-radius:4px;border:1px solid var(--line);color:var(--fg2)
+  }
+  .srow .tg.on{background:var(--accent2);border-color:var(--accent);color:#fff}
+  .srow .del{color:var(--fg2);font-size:23px;padding:0 6px;border-radius:4px}
+  .srow .del:hover{color:var(--err);background:rgba(244,82,107,.12)}
+
+  /* ---------- canvas ---------- */
+  #canvasWrap{position:relative;background:var(--canvas);min-height:0;overflow:hidden}
+  svg#board{width:100%;height:100%;display:block;touch-action:none}
+  #placeholder{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    pointer-events:none;color:#8794ad;font-size:20px;text-align:center;line-height:2
+  }
+  #placeholder code{background:#eef1f6;color:#3a465c;padding:2px 8px;border-radius:4px;font:17px var(--mono)}
+  #zoomTag{
+    position:absolute;left:10px;bottom:10px;background:rgba(16,20,24,.72);color:#fff;
+    font:15px var(--mono);padding:4px 10px;border-radius:5px;pointer-events:none
+  }
+
+  /* ---------- bottom panel ---------- */
+  #grip{height:6px;background:var(--bg2);border-top:1px solid var(--line);cursor:ns-resize}
+  #grip:hover{background:var(--accent2)}
+  #panel{background:var(--bg2);border-top:1px solid var(--line);display:grid;grid-template-rows:auto 1fr;height:410px;min-height:0}
+  #tabs{display:flex;gap:2px;padding:6px 10px 0;border-bottom:1px solid var(--line);align-items:center}
+  .tab{padding:10px 20px;border-radius:7px 7px 0 0;color:var(--fg2);border:1px solid transparent;border-bottom:none;font-size:21px}
+  .tab:hover{color:var(--fg)}
+  .tab.on{background:var(--bg);color:var(--fg);border-color:var(--line)}
+  .tab .badge{display:inline-block;min-width:22px;text-align:center;font-size:16px;border-radius:10px;padding:0 7px;margin-left:7px;background:var(--err);color:#fff}
+  .tab .badge.warn{background:var(--warn);color:#231a00}
+  .tab .badge.ok{background:var(--ok);color:#04210a}
+  .pane{display:none;overflow:auto;padding:14px 16px;min-height:0}
+  .pane.on{display:block}
+  .paneHead{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+  .paneHead h4{margin:0;font-size:22px}
+
+  /* ---------- transition table ---------- */
+  table.tt{border-collapse:collapse;font:26px var(--mono)}
+  table.tt th,table.tt td{border:1px solid var(--line);padding:11px 22px;text-align:center;min-width:88px}
+  table.tt thead th{background:var(--bg3);font-weight:600}
+  table.tt th.rowh{background:var(--bg3);text-align:left;white-space:nowrap}
+  table.tt td.undef{color:var(--err);background:rgba(244,82,107,.09)}
+  table.tt td.hl,table.tt th.rowh.hl{background:rgba(91,157,255,.2)}
+  table.tt td select{padding:4px 7px;font:22px var(--mono);width:100%}
+  .mark{color:var(--accent);font-weight:700}
+
+  /* ---------- code blocks ---------- */
+  pre.code{
+    background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:13px;
+    font:21px/1.6 var(--mono);white-space:pre;overflow:auto;margin:0;max-height:100%;
+    -moz-tab-size:2;tab-size:2
+  }
+  .subtabs{display:flex;gap:5px}
+  .subtab{padding:7px 15px;border-radius:6px;background:var(--bg3);border:1px solid var(--line);font-size:19px}
+  .subtab.on{background:var(--accent2);border-color:var(--accent)}
+
+  /* ---------- simulator ---------- */
+  .simRow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+  .simRow input.str{font:28px var(--mono);min-width:280px;flex:1;max-width:540px}
+  .verdict{padding:8px 17px;border-radius:6px;font-weight:600;font-size:21px;border:1px solid}
+  .verdict.acc{background:rgba(63,185,80,.14);border-color:var(--ok);color:#8ff0a4}
+  .verdict.rej{background:rgba(244,82,107,.13);border-color:var(--err);color:#ff9fae}
+  .verdict.err{background:rgba(210,153,34,.14);border-color:var(--warn);color:#f0cd7a}
+  .trace{font:24px var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:13px 15px;overflow-x:auto;white-space:nowrap}
+  .trace .cur{background:var(--accent2);color:#fff;border-radius:4px;padding:2px 7px}
+  .trace .sym{color:var(--accent)}
+  .trace .dim{color:var(--fg2)}
+  .tapeBox{font:32px var(--mono);letter-spacing:1px;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:12px 16px;overflow-x:auto;white-space:nowrap}
+  .tapeBox .done{color:var(--fg2)}
+  .tapeBox .now{background:var(--accent);color:#04121f;border-radius:4px;padding:2px 7px}
+  table.batch{border-collapse:collapse;font:21px var(--mono);margin-top:9px}
+  table.batch th,table.batch td{border:1px solid var(--line);padding:8px 19px;text-align:left}
+  table.batch th{background:var(--bg3)}
+  table.batch td.a{color:#8ff0a4}
+  table.batch td.r{color:#ff9fae}
+  table.batch td.e{color:#f0cd7a}
+
+  /* ---------- validation ---------- */
+  .issue{display:flex;gap:10px;align-items:flex-start;padding:10px 13px;border-radius:8px;border:1px solid var(--line);background:var(--bg);margin-bottom:9px;font-size:21px}
+  .issue .ic{font-weight:700;flex:none;width:22px;font-size:22px;text-align:center}
+  .issue.err{border-color:rgba(244,82,107,.5)} .issue.err .ic{color:var(--err)}
+  .issue.warn{border-color:rgba(210,153,34,.5)} .issue.warn .ic{color:var(--warn)}
+  .issue.ok{border-color:rgba(63,185,80,.5)} .issue.ok .ic{color:var(--ok)}
+  .issue .bd{flex:1;min-width:0}
+  .issue code{font:19px var(--mono);background:var(--bg3);padding:2px 8px;border-radius:4px}
+
+  /* ---------- floating UI ---------- */
+  .pop{
+    position:fixed;z-index:60;background:var(--bg2);border:1px solid var(--line);
+    border-radius:10px;box-shadow:0 12px 34px rgba(0,0,0,.55);padding:10px;min-width:210px
+  }
+  .pop h5{margin:0 0 9px;font:16px var(--mono);color:var(--fg2);display:flex;align-items:center;gap:6px}
+  .pop h5 b{color:var(--fg);font-weight:600}
+  .symGrid{display:flex;flex-wrap:wrap;gap:7px;max-width:400px}
+  .sym{
+    min-width:46px;text-align:center;font:21px var(--mono);padding:8px 13px;border-radius:6px;
+    background:var(--bg3);border:1px solid var(--line);position:relative
+  }
+  .sym:hover{border-color:var(--accent)}
+  .sym.on{background:var(--accent2);border-color:var(--accent);color:#fff;font-weight:600}
+  .sym.taken{opacity:.62;border-style:dashed}
+  .sym.taken::after{
+    content:attr(data-to);position:absolute;top:-9px;right:-5px;font:12.5px var(--mono);
+    background:var(--warn);color:#231a00;border-radius:6px;padding:0 4px;max-width:66px;overflow:hidden
+  }
+  .popFoot{display:flex;gap:6px;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+  #renameInput{position:fixed;z-index:60;font:24px var(--mono);text-align:center;width:180px;background:var(--bg2);border:1px solid var(--accent)}
+
+  #toasts{position:fixed;right:14px;bottom:14px;z-index:80;display:flex;flex-direction:column;gap:7px;align-items:flex-end}
+  .toast{
+    background:var(--bg3);border:1px solid var(--line);border-left:3px solid var(--accent);
+    border-radius:7px;padding:8px 13px;box-shadow:0 6px 20px rgba(0,0,0,.45);max-width:380px;
+    animation:pop .18s ease-out
+  }
+  .toast.warn{border-left-color:var(--warn)} .toast.err{border-left-color:var(--err)} .toast.ok{border-left-color:var(--ok)}
+  @keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+  /* por encima de #tupleModal: la confirmación puede abrirse desde él */
+  #modal{position:fixed;inset:0;z-index:120;background:rgba(6,8,12,.66);display:none;align-items:center;justify-content:center}
+  #modal.on{display:flex}
+  #modalBox{background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:22px;max-width:520px;box-shadow:0 20px 60px rgba(0,0,0,.6)}
+  #modalBox p{margin:0 0 18px;white-space:pre-wrap;font-size:18px}
+  #modalBox .acts{display:flex;gap:8px;justify-content:flex-end}
+
+  /* ---------- diálogo de la quíntupla ---------- */
+  #tupleModal{position:fixed;inset:0;z-index:95;background:rgba(6,8,12,.72);display:none;align-items:center;justify-content:center;padding:24px}
+  #tupleModal.on{display:flex}
+  #tupleBox{
+    background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:20px 22px;
+    width:min(760px,100%);max-height:100%;display:flex;flex-direction:column;gap:12px;
+    box-shadow:0 20px 60px rgba(0,0,0,.6)
+  }
+  #tupleBox h4{margin:0;font-size:21px}
+  #tupleBox h4 small{color:var(--fg2);font-weight:400;font-size:16px;margin-left:8px}
+  #tupleText{
+    width:100%;min-height:250px;resize:vertical;font:18px/1.6 var(--mono);
+    white-space:pre;overflow:auto;tab-size:2
+  }
+  #tupleErr:empty{display:none}
+  #tupleErr{
+    font-size:16px;border-radius:8px;padding:10px 13px;border:1px solid rgba(244,82,107,.5);
+    background:rgba(244,82,107,.09);color:#ff9fae;max-height:150px;overflow:auto;white-space:pre-wrap
+  }
+  #tupleErr.ok{border-color:rgba(63,185,80,.5);background:rgba(63,185,80,.1);color:#8ff0a4}
+  #tupleBox .acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  details.syntax{font-size:16px;color:var(--fg2)}
+  details.syntax summary{cursor:pointer;user-select:none}
+  details.syntax pre{font:15.5px/1.55 var(--mono);background:var(--bg);border:1px solid var(--line);
+    border-radius:8px;padding:12px;margin:8px 0 0;overflow:auto;max-height:200px}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <div id="toolbar">
+    <div class="brand">DFA<span>·</span>lab</div>
+    <button class="tbtn" data-mode="select" title="Mover estados y hacer panorámica">✥ Mover <kbd>V</kbd></button>
+    <button class="tbtn" data-mode="add"    title="Clic en el lienzo para crear un estado">＋ Estado <kbd>S</kbd></button>
+    <button class="tbtn" data-mode="connect"
+      title="Arrastra de un estado a otro. Para un bucle: sal del estado y vuelve a soltar sobre él.">⇢ Conectar <kbd>C</kbd></button>
+    <button class="tbtn" data-mode="delete" title="Clic para eliminar estados o transiciones">🗑 Borrar <kbd>D</kbd></button>
+    <div class="sep"></div>
+    <button class="tbtn" id="btnFit" title="Encajar el diagrama en la vista">⤢ Encajar</button>
+    <button class="tbtn" id="btnTuple" title="Escribir la quíntupla (Q, Σ, δ, q₀, F) y generar el autómata">
+      ⟨5⟩ Quíntupla</button>
+    <div class="spacer"></div>
+    <button class="tbtn" id="btnExample" title="Cargar un DFA de ejemplo">Ejemplo</button>
+    <button class="tbtn" id="btnClear">Vaciar</button>
+    <div class="sep"></div>
+    <button class="tbtn" id="btnSaveJson">⭳ JSON</button>
+    <button class="tbtn" id="btnLoadJson">⭱ JSON</button>
+    <button class="tbtn" id="btnPng">PNG</button>
+    <button class="tbtn" id="btnSvg">SVG</button>
+    <input type="file" id="fileInput" accept=".json,application/json" hidden>
+  </div>
+
+  <div id="main">
+
+    <div id="side">
+      <div class="sec">
+        <h3>Paleta · arrastra al lienzo</h3>
+        <div class="palette">
+          <div class="pitem" draggable="true" data-kind="normal"
+               title="Arrastra al lienzo para crear un estado normal">
+            <span class="glyph">
+              <svg width="46" height="46" viewBox="0 0 40 40">
+                <circle cx="20" cy="20" r="15" fill="#f4f7fc" stroke="#8fa0bb" stroke-width="2.4"/>
+                <text x="20" y="21" text-anchor="middle" dominant-baseline="central"
+                      font-family="Consolas,monospace" font-size="14" fill="#101418">q</text>
+              </svg>
+            </span>
+            <span class="tx"><b>Estado</b><small>normal, no final</small></span>
+          </div>
+
+          <div class="pitem" draggable="true" data-kind="accept"
+               title="Arrastra al lienzo para crear un estado de aceptación (doble círculo)">
+            <span class="glyph">
+              <svg width="46" height="46" viewBox="0 0 40 40">
+                <circle cx="20" cy="20" r="15" fill="#f4f7fc" stroke="#3fb950" stroke-width="2.4"/>
+                <circle cx="20" cy="20" r="11" fill="none" stroke="#3fb950" stroke-width="2"/>
+                <text x="20" y="21" text-anchor="middle" dominant-baseline="central"
+                      font-family="Consolas,monospace" font-size="12" fill="#101418">*</text>
+              </svg>
+            </span>
+            <span class="tx"><b>Estado de aceptación</b><small>entra en F</small></span>
+          </div>
+
+          <div class="pitem" draggable="true" data-kind="trap"
+               title="Arrastra al lienzo para crear un estado dummy (trampa): absorbe todo Σ y nunca acepta">
+            <span class="glyph">
+              <svg width="46" height="46" viewBox="0 0 40 40">
+                <defs>
+                  <marker id="pGlyphArrow" viewBox="0 0 10 10" refX="8" refY="5"
+                          markerWidth="5" markerHeight="5" orient="auto">
+                    <path d="M0,0 L10,5 L0,10 z" fill="#d29922"/>
+                  </marker>
+                </defs>
+                <path d="M11,11 C9,1 31,1 29,11" fill="none" stroke="#d29922" stroke-width="2"
+                      marker-end="url(#pGlyphArrow)"/>
+                <circle cx="20" cy="23" r="13" fill="#f4f7fc" stroke="#d29922"
+                        stroke-width="2.4" stroke-dasharray="4 3"/>
+                <text x="20" y="24" text-anchor="middle" dominant-baseline="central"
+                      font-family="Consolas,monospace" font-size="12" fill="#101418">∅</text>
+              </svg>
+            </span>
+            <span class="tx"><b>Estado dummy</b><small>trampa: bucle en todo Σ</small></span>
+          </div>
+        </div>
+        <div class="hint">Arrástralos al lienzo, o haz clic para colocarlos en el centro de la vista.</div>
+      </div>
+
+      <div class="sec">
+        <h3>Alfabeto Σ</h3>
+        <div class="chips" id="alphaChips"></div>
+        <div class="row">
+          <input id="alphaInput" placeholder="a, b, 0, 1…" autocomplete="off">
+          <button class="btn primary" id="alphaAdd">Añadir</button>
+        </div>
+        <div class="hint">Separa varios con coma o espacio. Se admiten símbolos de más de un carácter. Un DFA no admite ε.</div>
+      </div>
+
+      <div class="sec">
+        <h3>Estados Q <span id="qCount" style="margin-left:auto;font-weight:400"></span></h3>
+        <div id="stateList"></div>
+        <div class="hint">Doble clic en un estado del lienzo para renombrarlo. <b>→</b> inicial, <b>*</b> aceptación.</div>
+      </div>
+
+      <div class="sec">
+        <h3>Lenguaje objetivo L</h3>
+        <textarea id="langInput" rows="3" style="width:100%;resize:vertical"
+          placeholder="L = { w ∈ {a,b}* : |w|_a es par }"></textarea>
+        <div class="hint">Descríbelo en palabras o en notación. Se incluye en el LaTeX y en el prompt para el LLM.</div>
+      </div>
+    </div>
+
+    <div id="right">
+      <div id="canvasWrap">
+        <svg id="board" xmlns="http://www.w3.org/2000/svg">
+          <style>
+            .edge-path{fill:none;stroke:#54606f;stroke-width:2.9}
+            .edge-hit{fill:none;stroke:transparent;stroke-width:24;cursor:pointer;pointer-events:stroke}
+            .edge-lbl{font:700 26px "Cascadia Code",Consolas,monospace;fill:#1d2733;text-anchor:middle;dominant-baseline:middle;pointer-events:none}
+            .edge-lbl-bg{fill:#ffffff;stroke:none}
+            .edge.hl .edge-path{stroke:#2f6fd0;stroke-width:4}
+            .edge.hl .edge-lbl{fill:#2f6fd0}
+            .edge.active .edge-path{stroke:#c9761b;stroke-width:4.2}
+            .edge.active .edge-lbl{fill:#a8590c}
+            .node circle.body{fill:#f4f7fc;stroke:#48566b;stroke-width:2.9}
+            .node circle.inner{fill:none;stroke:#48566b;stroke-width:2.4}
+            .node text{font:600 34px "Cascadia Code",Consolas,monospace;fill:#101418;text-anchor:middle;dominant-baseline:central;pointer-events:none;user-select:none}
+            .node.sel circle.body{stroke:#2f6fd0;stroke-width:4}
+            .node.hl circle.body{fill:#e2ecff;stroke:#2f6fd0;stroke-width:4}
+            .node.tgt circle.body{fill:#e2ecff;stroke:#2f6fd0;stroke-width:4.6}
+            .node.cur circle.body{fill:#ffe6c2;stroke:#c9761b;stroke-width:4.4}
+            .node.src circle.body{fill:#dff3e2;stroke:#3fb950;stroke-width:3.8}
+            .init-arrow{stroke:#48566b;stroke-width:2.9;fill:none}
+            .band{stroke:#2f6fd0;stroke-width:2.6;stroke-dasharray:7 5;fill:none;pointer-events:none}
+            .band.self{stroke-dasharray:none;stroke-width:3}
+            .grid-dot{fill:#e6eaf1}
+          </style>
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="12" markerHeight="12"
+                    markerUnits="userSpaceOnUse" orient="auto">
+              <path d="M0,0 L10,5 L0,10 z" fill="#54606f"/>
+            </marker>
+            <marker id="ah-hl" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="13" markerHeight="13"
+                    markerUnits="userSpaceOnUse" orient="auto">
+              <path d="M0,0 L10,5 L0,10 z" fill="#2f6fd0"/>
+            </marker>
+            <marker id="ah-ac" viewBox="0 0 10 10" refX="9.5" refY="5" markerWidth="13" markerHeight="13"
+                    markerUnits="userSpaceOnUse" orient="auto">
+              <path d="M0,0 L10,5 L0,10 z" fill="#c9761b"/>
+            </marker>
+            <pattern id="dots" width="28" height="28" patternUnits="userSpaceOnUse">
+              <circle class="grid-dot" cx="1.2" cy="1.2" r="1.2"/>
+            </pattern>
+          </defs>
+          <rect id="bgRect" x="-6000" y="-6000" width="12000" height="12000" fill="url(#dots)"/>
+          <g id="gEdges"></g>
+          <g id="gNodes"></g>
+          <g id="gOverlay"></g>
+        </svg>
+        <div id="placeholder">
+          Arrastra un elemento de la <b>paleta</b>, o haz doble clic en el lienzo, para crear un estado.<br>
+          Arrastra de un estado a otro (o mantén <code>Shift</code>) para conectarlos.<br>
+          Para un <b>bucle</b>, arrastra desde el estado, sal de él y vuelve a soltar encima.
+        </div>
+        <div id="zoomTag">100%</div>
+      </div>
+
+      <div id="grip"></div>
+
+      <div id="panel">
+        <div id="tabs">
+          <button class="tab on" data-pane="pTable">Tabla δ</button>
+          <button class="tab" data-pane="pTex">LaTeX</button>
+          <button class="tab" data-pane="pSim">Simulador</button>
+          <button class="tab" data-pane="pVal">Validación <span class="badge ok" id="valBadge">0</span></button>
+        </div>
+
+        <div class="pane on" id="pTable">
+          <div class="paneHead">
+            <h4>δ : Q × Σ → Q</h4>
+            <label style="display:flex;gap:5px;align-items:center;color:var(--fg2)">
+              <input type="checkbox" id="tblEdit" style="accent-color:var(--accent)"> Editar desde la tabla
+            </label>
+            <button class="btn sm" id="btnCopyTsv">Copiar como TSV</button>
+          </div>
+          <div id="tableBox"></div>
+        </div>
+
+        <div class="pane" id="pTex">
+          <div class="paneHead">
+            <div class="subtabs">
+              <button class="subtab on" data-tex="full">Definición completa</button>
+              <button class="subtab" data-tex="array">Solo tabla</button>
+              <button class="subtab" data-tex="tikz">TikZ (diagrama)</button>
+              <button class="subtab" data-tex="prompt"
+                title="Pide a un LLM que compruebe si L(M) es el lenguaje objetivo">Prompt: evaluar M</button>
+              <button class="subtab" data-tex="vision"
+                title="Pide a un LLM que lea la foto de un diagrama dibujado a mano y devuelva su quíntupla">Prompt: dibujo → quíntupla</button>
+            </div>
+            <div class="spacer" style="flex:1"></div>
+            <button class="btn primary" id="btnCopyTex">Copiar</button>
+          </div>
+          <pre class="code" id="texOut"></pre>
+        </div>
+
+        <div class="pane" id="pSim">
+          <div class="simRow">
+            <input class="str" id="simInput" placeholder="cadena a evaluar, p. ej. abba" autocomplete="off">
+            <button class="btn" id="simFirst" title="Reiniciar">⏮</button>
+            <button class="btn" id="simPrev" title="Paso atrás">◀</button>
+            <button class="btn" id="simNext" title="Paso adelante">▶</button>
+            <button class="btn" id="simEnd" title="Ejecutar hasta el final">⏭</button>
+            <span id="simVerdict"></span>
+          </div>
+          <div class="tapeBox" id="simTape"></div>
+          <div class="trace" id="simTrace" style="margin-top:8px"></div>
+          <div class="paneHead" style="margin-top:16px">
+            <h4>Prueba por lotes</h4>
+            <button class="btn" id="btnBatch">Evaluar todas</button>
+            <span style="color:var(--fg2)">una cadena por línea · línea vacía = ε</span>
+          </div>
+          <textarea id="batchInput" rows="4" style="width:100%;max-width:520px;font-family:var(--mono);resize:vertical"
+            placeholder="bb&#10;a&#10;aba&#10;abba"></textarea>
+          <div id="batchOut"></div>
+        </div>
+
+        <div class="pane" id="pVal">
+          <div class="paneHead">
+            <h4>Comprobaciones</h4>
+            <button class="btn" id="btnTrap">Completar δ con estado trampa</button>
+          </div>
+          <div id="valOut"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="tupleModal"><div id="tupleBox">
+  <h4>Generar DFA desde su quíntupla <small>M = (Q, Σ, δ, q₀, F)</small></h4>
+  <textarea id="tupleText" spellcheck="false" autocomplete="off"
+    placeholder="Q = {q0, q1}&#10;Sigma = {a, b}&#10;q0 = q0&#10;F = {q1}&#10;delta(q0,a) = q1"></textarea>
+  <div id="tupleErr"></div>
+  <details class="syntax">
+    <summary>Formatos aceptados</summary>
+<pre>Conjuntos      Q = {q0, q1, q2}      Σ = {a, b}      F = {q2}
+               (también: Sigma, Alfabeto, Estados, Aceptacion, Finales)
+Inicial        q0 = q0     ·  inicial = q0  ·  q_0 = q0
+Lenguaje       L = { w : w termina en ab }     → va al panel «Lenguaje objetivo»
+
+Transiciones (cualquiera de estas formas, una por línea):
+   δ(q0, a) = q1        d(q0,a)=q1        delta(q0,a) -> q1
+   (q0, a) -> q1        q0, a -> q1       q0 a q1
+
+O una tabla completa, con «|» o tabuladores como separador:
+   δ    | a  | b
+   ->q0 | q1 | q0
+   *q1  | q1 | q0
+
+Q, Σ, q₀ y F son opcionales: si faltan se deducen de las transiciones.</pre>
+  </details>
+  <div class="acts">
+    <button class="btn" id="tupleVision"
+      title="Copia un prompt para que un LLM lea la foto de un diagrama hecho a mano y te devuelva la quíntupla lista para pegar aquí">⧉ Prompt: foto de un dibujo → quíntupla</button>
+    <button class="btn" id="tupleExample">Ejemplo</button>
+    <button class="btn" id="tupleFromCurrent">Volcar el DFA actual</button>
+    <div class="spacer" style="flex:1"></div>
+    <button class="btn" id="tupleCancel">Cancelar</button>
+    <button class="btn primary" id="tupleGo">Generar DFA</button>
+  </div>
+</div></div>
+
+<div id="toasts"></div>
+<div id="modal"><div id="modalBox">
+  <p id="modalMsg"></p>
+  <div class="acts">
+    <button class="btn" id="modalNo">Cancelar</button>
+    <button class="btn primary" id="modalYes">Aceptar</button>
+  </div>
+</div></div>
+
+<script>
+"use strict";
+
+/* ==========================================================================
+   1. MODELO
+   δ es la fuente de verdad. Las aristas del diagrama son una vista derivada,
+   por lo que el no-determinismo es imposible por construcción: la clave
+   (q, a) sólo admite un destino.
+   ========================================================================== */
+
+const SEP = "\u0000";                       // separador de clave (q,a)
+const R = 44;                               // radio del nodo
+const STORE_KEY = "dfa-editor-v1";
+
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => [...r.querySelectorAll(s)];
+
+let model = blankModel();
+let seq = 0;                                // contador para ids de estado
+
+function blankModel(){
+  return { formatVersion:1, alphabet:["a","b"], states:[], initial:null, delta:{}, language:"" };
+}
+
+const key      = (q, a) => q + SEP + a;
+const unkey    = k => { const i = k.indexOf(SEP); return [k.slice(0,i), k.slice(i+1)]; };
+const getState = id => model.states.find(s => s.id === id) || null;
+const nameOf   = id => (getState(id) || {}).name || "?";
+const newId    = () => "s" + (++seq);
+
+/** Agrupa δ por (origen, destino) para dibujar una arista por par. */
+function deriveEdges(){
+  const map = new Map();
+  for(const k in model.delta){
+    const [from, sym] = unkey(k);
+    const to = model.delta[k];
+    if(!getState(from) || !getState(to)) continue;
+    const gk = from + SEP + to;
+    if(!map.has(gk)) map.set(gk, { from, to, symbols:[] });
+    map.get(gk).symbols.push(sym);
+  }
+  const order = new Map(model.alphabet.map((s,i)=>[s,i]));
+  for(const e of map.values())
+    e.symbols.sort((x,y)=>(order.get(x) ?? 1e9) - (order.get(y) ?? 1e9));
+  return [...map.values()];
+}
+
+/* ==========================================================================
+   2. UTILIDADES DE UI (toasts, confirmación, descargas)
+   ========================================================================== */
+
+function toast(msg, kind){
+  const el = document.createElement("div");
+  el.className = "toast" + (kind ? " " + kind : "");
+  el.textContent = msg;
+  $("#toasts").appendChild(el);
+  setTimeout(() => { el.style.transition="opacity .3s"; el.style.opacity="0";
+                     setTimeout(()=>el.remove(), 320); }, 2800);
+}
+
+/** Confirmación propia (no usamos confirm() nativo: bloquearía la página). */
+function confirmBox(msg){
+  return new Promise(res => {
+    $("#modalMsg").textContent = msg;
+    $("#modal").classList.add("on");
+    const done = v => { $("#modal").classList.remove("on");
+                        $("#modalYes").onclick = $("#modalNo").onclick = null; res(v); };
+    $("#modalYes").onclick = () => done(true);
+    $("#modalNo").onclick  = () => done(false);
+  });
+}
+
+function download(filename, content, mime){
+  const blob = content instanceof Blob ? content : new Blob([content], {type: mime || "text/plain;charset=utf-8"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
+async function copyText(txt, what){
+  try{
+    await navigator.clipboard.writeText(txt);
+    toast((what || "Texto") + " copiado al portapapeles", "ok");
+  }catch(e){
+    // Fallback para file:// en navegadores que restringen la Clipboard API
+    const ta = document.createElement("textarea");
+    ta.value = txt; ta.style.position="fixed"; ta.style.opacity="0";
+    document.body.appendChild(ta); ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    toast(ok ? (what||"Texto") + " copiado" : "No se pudo copiar; selecciona y copia a mano",
+          ok ? "ok" : "warn");
+  }
+}
+
+/* ==========================================================================
+   3. VISTA SVG: viewBox, coordenadas, dibujo
+   ========================================================================== */
+
+const svg = $("#board");
+const gEdges = $("#gEdges"), gNodes = $("#gNodes"), gOverlay = $("#gOverlay");
+let view = { x:0, y:0, w:1000, h:640 };     // viewBox actual
+
+function applyView(){
+  svg.setAttribute("viewBox", `${view.x} ${view.y} ${view.w} ${view.h}`);
+  const rect = svg.getBoundingClientRect();
+  $("#zoomTag").textContent = Math.round((rect.width / view.w) * 100) + "%";
+}
+
+function resetViewToSize(){
+  const r = svg.getBoundingClientRect();
+  if(!r.width || !r.height) return;
+  view.h = view.w * (r.height / r.width);   // conserva el zoom horizontal
+  applyView();
+}
+
+function clientToSvg(cx, cy){
+  const p = svg.createSVGPoint(); p.x = cx; p.y = cy;
+  return p.matrixTransform(svg.getScreenCTM().inverse());
+}
+function svgToClient(x, y){
+  const p = svg.createSVGPoint(); p.x = x; p.y = y;
+  return p.matrixTransform(svg.getScreenCTM());
+}
+
+const el = (tag, attrs) => {
+  const n = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for(const k in attrs) n.setAttribute(k, attrs[k]);
+  return n;
+};
+
+/* --- geometría de aristas ------------------------------------------------ */
+
+const CURVE = 66;   // separación de las Bézier en pares recíprocos
+const LOOP_H = 84;  // altura del bucle
+
+/** Devuelve {d, lx, ly} : trazado SVG y punto de la etiqueta. */
+function edgeGeometry(a, b, curved){
+  if(a.id === b.id){
+    const p1 = { x: a.x + R*Math.cos(-2.007), y: a.y + R*Math.sin(-2.007) };  // ≈ -115°
+    const p2 = { x: a.x + R*Math.cos(-1.134), y: a.y + R*Math.sin(-1.134) };  // ≈ -65°
+    return {
+      d: `M${p1.x.toFixed(2)},${p1.y.toFixed(2)} C${a.x-62},${a.y-LOOP_H-46} ${a.x+62},${a.y-LOOP_H-46} ${p2.x.toFixed(2)},${p2.y.toFixed(2)}`,
+      lx: a.x, ly: a.y - LOOP_H - 26
+    };
+  }
+
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.hypot(dx, dy) || 1;
+  const ux = dx/len, uy = dy/len;
+
+  if(!curved){
+    const s = { x: a.x + ux*R,        y: a.y + uy*R };
+    const e = { x: b.x - ux*(R+5),    y: b.y - uy*(R+5) };
+    return { d:`M${s.x.toFixed(2)},${s.y.toFixed(2)} L${e.x.toFixed(2)},${e.y.toFixed(2)}`,
+             lx:(s.x+e.x)/2, ly:(s.y+e.y)/2 };
+  }
+
+  // Bézier cuadrática: cada sentido se curva hacia "su" izquierda, así no se solapan.
+  const mx = (a.x+b.x)/2, my = (a.y+b.y)/2;
+  const px = -uy, py = ux;                       // perpendicular
+  const c  = { x: mx + px*CURVE, y: my + py*CURVE };
+
+  const trim = (p, ctrl, extra) => {
+    const vx = ctrl.x - p.x, vy = ctrl.y - p.y;
+    const l = Math.hypot(vx, vy) || 1;
+    return { x: p.x + vx/l*(R+extra), y: p.y + vy/l*(R+extra) };
+  };
+  const s = trim(a, c, 0), e = trim(b, c, 5);
+  // punto medio de la Bézier (t = 0.5)
+  const lx = (s.x + 2*c.x + e.x)/4, ly = (s.y + 2*c.y + e.y)/4;
+  return { d:`M${s.x.toFixed(2)},${s.y.toFixed(2)} Q${c.x.toFixed(2)},${c.y.toFixed(2)} ${e.x.toFixed(2)},${e.y.toFixed(2)}`,
+           lx, ly };
+}
+
+/** Tamaño de letra del nodo: grande por defecto, sólo se reduce si el nombre no cabe. */
+function fontFor(name){
+  return name.length <= 2 ? 34
+       : name.length <= 3 ? 30
+       : name.length <= 5 ? 23
+       : name.length <= 8 ? 16
+       : name.length <= 11 ? 13
+       : 10;
+}
+
+/* --- render principal ---------------------------------------------------- */
+
+let selectedId = null;
+let hlEdge = null;      // {from,to} resaltado por hover en la tabla
+
+function render(){
+  renderEdges();
+  renderNodes();
+  $("#placeholder").style.display = model.states.length ? "none" : "flex";
+}
+
+function renderEdges(){
+  gEdges.textContent = "";
+  const edges = deriveEdges();
+  const present = new Set(edges.map(e => e.from + SEP + e.to));
+
+  for(const e of edges){
+    const a = getState(e.from), b = getState(e.to);
+    const curved = e.from !== e.to && present.has(e.to + SEP + e.from);
+    const g = edgeGeometry(a, b, curved);
+
+    const grp = el("g", { class:"edge" });
+    grp.dataset.from = e.from; grp.dataset.to = e.to;
+
+    let marker = "ah";
+    if(hlEdge && hlEdge.from === e.from && hlEdge.to === e.to){ grp.classList.add("hl"); marker = "ah-hl"; }
+    if(sim.active && sim.idx > 0){
+      const st = sim.steps[sim.idx-1];
+      if(st && st.from === e.from && st.to === e.to){ grp.classList.add("active"); marker = "ah-ac"; }
+    }
+
+    grp.appendChild(el("path", { class:"edge-path", d:g.d, "marker-end":`url(#${marker})` }));
+    grp.appendChild(el("path", { class:"edge-hit",  d:g.d }));
+
+    const label = e.symbols.join(", ");
+    const w = Math.max(28, label.length * 15.9) + 12;   // ~0.61 em por carácter a 26px
+    grp.appendChild(el("rect", { class:"edge-lbl-bg", x:g.lx - w/2, y:g.ly - 18, width:w, height:36, rx:6 }));
+    const t = el("text", { class:"edge-lbl", x:g.lx, y:g.ly });
+    t.textContent = label;
+    grp.appendChild(t);
+
+    gEdges.appendChild(grp);
+  }
+}
+
+function renderNodes(){
+  gNodes.textContent = "";
+  for(const s of model.states){
+    const g = el("g", { class:"node", transform:`translate(${s.x},${s.y})` });
+    g.dataset.id = s.id;
+    if(s.id === selectedId) g.classList.add("sel");
+    if(hlEdge && hlEdge.from === s.id) g.classList.add("hl");
+    if(sim.active && sim.cursorState === s.id) g.classList.add("cur");
+    else if(!sim.active && s.id === model.initial) g.classList.add("src");
+    if(drag.type === "edge" && drag.fromId === s.id) g.classList.add("src");
+
+    if(s.id === model.initial){
+      g.appendChild(el("path", { class:"init-arrow", d:`M${-R-54},0 L${-R-9},0`, "marker-end":"url(#ah)" }));
+    }
+    g.appendChild(el("circle", { class:"body", cx:0, cy:0, r:R }));
+    if(s.accepting) g.appendChild(el("circle", { class:"inner", cx:0, cy:0, r:R-7 }));
+
+    const t = el("text", { x:0, y:0, "font-size":fontFor(s.name) });
+    t.textContent = s.name;
+    g.appendChild(t);
+    gNodes.appendChild(g);
+  }
+}
+
+/**
+ * Aplica el resaltado alternando clases sobre el DOM existente.
+ * Importante: NO reconstruye el SVG. Hacerlo desde un handler de hover
+ * eliminaría el elemento bajo el cursor y provocaría un bucle mouseout/mouseover.
+ */
+function applyHighlight(){
+  for(const g of $$("#gEdges .edge")){
+    const on = !!(hlEdge && g.dataset.from === hlEdge.from && g.dataset.to === hlEdge.to);
+    g.classList.toggle("hl", on);
+    const p = g.querySelector(".edge-path");
+    if(p) p.setAttribute("marker-end",
+      g.classList.contains("active") ? "url(#ah-ac)" : on ? "url(#ah-hl)" : "url(#ah)");
+  }
+  for(const g of $$("#gNodes .node"))
+    g.classList.toggle("hl", !!(hlEdge && g.dataset.id === hlEdge.from));
+  markCells();
+}
+
+/** Recalcula todo lo derivado del modelo y persiste. */
+function commit(){
+  render();
+  renderAlphabet();
+  renderStateList();
+  renderTable();
+  renderTex();
+  renderValidation();
+  refreshSim();
+  save();
+}
+
+/* ==========================================================================
+   4. OPERACIONES SOBRE EL MODELO
+   ========================================================================== */
+
+/** Devuelve `base` o base2, base3… hasta que el nombre no esté ocupado. */
+function uniqueName(base){
+  if(!model.states.some(s => s.name === base)) return base;
+  let i = 2;
+  while(model.states.some(s => s.name === base + i)) i++;
+  return base + i;
+}
+
+function addState(x, y, name, opts){
+  const o = opts || {};
+  let n = name;
+  if(!n){
+    let i = 0;
+    do { n = "q" + i++; } while(model.states.some(s => s.name === n));
+  }else{
+    n = uniqueName(n);
+  }
+  const s = { id:newId(), name:n, x:Math.round(x), y:Math.round(y), accepting:!!o.accepting };
+  model.states.push(s);
+  if(!model.initial) model.initial = s.id;      // el primer estado es el inicial
+  selectedId = s.id;
+  commit();
+  return s;
+}
+
+function removeState(id){
+  model.states = model.states.filter(s => s.id !== id);
+  for(const k in model.delta){
+    const [from] = unkey(k);
+    if(from === id || model.delta[k] === id) delete model.delta[k];
+  }
+  if(model.initial === id) model.initial = model.states.length ? model.states[0].id : null;
+  if(selectedId === id) selectedId = null;
+  commit();
+}
+
+function renameState(id, raw){
+  const name = raw.trim();
+  const s = getState(id);
+  if(!s || !name || name === s.name) return;
+  if(model.states.some(o => o.id !== id && o.name === name)){
+    toast(`Ya existe un estado llamado «${name}»`, "err"); return;
+  }
+  s.name = name;
+  commit();
+}
+
+/** Asigna δ(from, sym) = to, retirando el símbolo de donde estuviera. */
+function setDelta(from, sym, to){
+  const k = key(from, sym);
+  const prev = model.delta[k];
+  if(to === null || to === undefined) delete model.delta[k];
+  else model.delta[k] = to;
+  if(prev && to && prev !== to)
+    toast(`δ(${nameOf(from)}, ${sym}) se reasignó de ${nameOf(prev)} a ${nameOf(to)}`, "warn");
+  commit();
+}
+
+function removeEdge(from, to){
+  for(const k in model.delta){
+    const [f] = unkey(k);
+    if(f === from && model.delta[k] === to) delete model.delta[k];
+  }
+  commit();
+}
+
+/* ==========================================================================
+   5. ALFABETO
+   ========================================================================== */
+
+function renderAlphabet(){
+  const box = $("#alphaChips");
+  box.textContent = "";
+  if(!model.alphabet.length){
+    box.innerHTML = '<span class="empty">Σ está vacío</span>';
+    return;
+  }
+  for(const sym of model.alphabet){
+    const c = document.createElement("span");
+    c.className = "chip";
+    const b = document.createElement("b"); b.textContent = sym;
+    const x = document.createElement("button");
+    x.className = "x"; x.textContent = "×"; x.title = `Eliminar «${sym}» de Σ`;
+    x.onclick = () => removeSymbol(sym);
+    c.append(b, x);
+    box.appendChild(c);
+  }
+}
+
+function addSymbols(text){
+  const parts = text.split(/[\s,]+/).filter(Boolean);
+  let added = 0;
+  for(const p of parts){
+    if(p === "ε" || p === "\\varepsilon" || p.toLowerCase() === "epsilon"){
+      toast("Un DFA no admite transiciones ε: no se puede añadir a Σ", "err"); continue;
+    }
+    if(model.alphabet.includes(p)){ toast(`«${p}» ya está en Σ`, "warn"); continue; }
+    model.alphabet.push(p); added++;
+  }
+  if(added){ commit(); toast(added === 1 ? "Símbolo añadido a Σ" : `${added} símbolos añadidos a Σ`, "ok"); }
+}
+
+async function removeSymbol(sym){
+  const n = Object.keys(model.delta).filter(k => unkey(k)[1] === sym).length;
+  if(n && !await confirmBox(
+      `Vas a eliminar «${sym}» de Σ.\n\nSe borrarán ${n} transición(es) que lo usan. ¿Continuar?`)) return;
+  model.alphabet = model.alphabet.filter(s => s !== sym);
+  for(const k in model.delta) if(unkey(k)[1] === sym) delete model.delta[k];
+  commit();
+}
+
+$("#alphaAdd").onclick = () => { addSymbols($("#alphaInput").value); $("#alphaInput").value = ""; };
+$("#alphaInput").addEventListener("keydown", e => {
+  if(e.key === "Enter"){ e.preventDefault(); $("#alphaAdd").click(); }
+});
+$("#langInput").addEventListener("input", () => { model.language = $("#langInput").value; renderTex(); save(); });
+
+/* ==========================================================================
+   6. LISTA DE ESTADOS (barra lateral)
+   ========================================================================== */
+
+function renderStateList(){
+  const box = $("#stateList");
+  box.textContent = "";
+  $("#qCount").textContent = model.states.length ? `|Q| = ${model.states.length}` : "";
+  if(!model.states.length){
+    box.innerHTML = '<span class="empty">Sin estados todavía</span>';
+    return;
+  }
+  for(const s of model.states){
+    const r = document.createElement("div");
+    r.className = "srow" + (s.id === selectedId ? " sel" : "");
+
+    const nm = document.createElement("span");
+    nm.className = "nm";
+    nm.textContent = (s.id === model.initial ? "→ " : "") + (s.accepting ? "*" : "") + s.name;
+    nm.title = "Clic para centrar; doble clic para renombrar";
+    nm.onclick = () => { selectedId = s.id; centerOn(s); render(); renderStateList(); };
+    nm.ondblclick = () => openRename(s);
+
+    const bi = document.createElement("button");
+    bi.className = "tg" + (s.id === model.initial ? " on" : "");
+    bi.textContent = "→"; bi.title = "Marcar como estado inicial";
+    bi.onclick = () => { model.initial = s.id; commit(); };
+
+    const ba = document.createElement("button");
+    ba.className = "tg" + (s.accepting ? " on" : "");
+    ba.textContent = "*"; ba.title = "Alternar estado de aceptación";
+    ba.onclick = () => { s.accepting = !s.accepting; commit(); };
+
+    const bd = document.createElement("button");
+    bd.className = "del"; bd.textContent = "×"; bd.title = "Eliminar estado";
+    bd.onclick = () => removeState(s.id);
+
+    r.append(nm, bi, ba, bd);
+    box.appendChild(r);
+  }
+}
+
+function centerOn(s){
+  view.x = s.x - view.w/2;
+  view.y = s.y - view.h/2;
+  applyView();
+}
+
+/* ==========================================================================
+   7. INTERACCIÓN CON EL LIENZO
+   ========================================================================== */
+
+let mode = "select";
+let drag = { type:null };
+
+function setMode(m){
+  mode = m;
+  $$("#toolbar .tbtn[data-mode]").forEach(b => b.classList.toggle("on", b.dataset.mode === m));
+  svg.style.cursor = m === "add" ? "copy" : m === "connect" ? "crosshair" : m === "delete" ? "not-allowed" : "default";
+}
+$$("#toolbar .tbtn[data-mode]").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+
+document.addEventListener("keydown", e => {
+  const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+  if(typing) return;
+  const k = e.key.toLowerCase();
+  if(k === "v") setMode("select");
+  else if(k === "s") setMode("add");
+  else if(k === "c") setMode("connect");
+  else if(k === "d") setMode("delete");
+  else if(k === "escape"){ closePopover(); closeTupleModal(); if(drag.type){ endDrag(); } }
+  else if((e.key === "Delete" || e.key === "Backspace") && selectedId){ e.preventDefault(); removeState(selectedId); }
+});
+
+const nodeFromEvent = ev => {
+  const g = ev.target.closest(".node");
+  return g ? getState(g.dataset.id) : null;
+};
+const edgeFromEvent = ev => {
+  const g = ev.target.closest(".edge");
+  return g ? { from:g.dataset.from, to:g.dataset.to } : null;
+};
+
+svg.addEventListener("mousedown", ev => {
+  if(ev.button === 1){ startPan(ev); return; }
+  if(ev.button !== 0) return;
+  closePopover();
+
+  const node = nodeFromEvent(ev);
+  const edge = node ? null : edgeFromEvent(ev);
+
+  if(mode === "delete"){
+    if(node) removeState(node.id);
+    else if(edge) removeEdge(edge.from, edge.to);
+    return;
+  }
+
+  if(node){
+    selectedId = node.id;
+    if(mode === "connect" || ev.shiftKey) startEdgeDrag(node, ev);
+    else startNodeDrag(node, ev);
+    renderStateList();
+    return;
+  }
+
+  if(edge){ openEdgePopover(edge.from, edge.to, ev.clientX, ev.clientY); return; }
+
+  if(mode === "add"){
+    const p = clientToSvg(ev.clientX, ev.clientY);
+    addState(p.x, p.y);
+    return;
+  }
+
+  selectedId = null;
+  render(); renderStateList();
+  startPan(ev);
+});
+
+svg.addEventListener("dblclick", ev => {
+  const node = nodeFromEvent(ev);
+  if(node){ openRename(node); return; }
+  if(ev.target.closest(".edge")) return;
+  const p = clientToSvg(ev.clientX, ev.clientY);
+  addState(p.x, p.y);
+});
+
+svg.addEventListener("contextmenu", ev => {
+  const node = nodeFromEvent(ev);
+  if(!node) return;
+  ev.preventDefault();
+  openNodeMenu(node, ev.clientX, ev.clientY);
+});
+
+svg.addEventListener("wheel", ev => {
+  ev.preventDefault();
+  const p = clientToSvg(ev.clientX, ev.clientY);
+  const f = ev.deltaY > 0 ? 1.12 : 1/1.12;
+  const nw = Math.min(9000, Math.max(160, view.w * f));
+  const k = nw / view.w;
+  view.x = p.x - (p.x - view.x) * k;
+  view.y = p.y - (p.y - view.y) * k;
+  view.w = nw; view.h *= k;
+  applyView();
+  positionOpenPopover();
+}, { passive:false });
+
+function startNodeDrag(node, ev){
+  const p = clientToSvg(ev.clientX, ev.clientY);
+  drag = { type:"node", id:node.id, dx:node.x - p.x, dy:node.y - p.y, moved:false };
+}
+
+function startEdgeDrag(node, ev){
+  // `left` recuerda si el puntero llegó a salir del nodo origen: sólo entonces
+  // volver sobre él cuenta como «conectar consigo mismo» (bucle).
+  drag = { type:"edge", fromId:node.id, x:node.x, y:node.y, left:false, self:false };
+  const line = el("path", { class:"band", d:"", "marker-end":"url(#ah-hl)" });
+  line.id = "band";
+  gOverlay.appendChild(line);
+  render();
+}
+
+function startPan(ev){
+  drag = { type:"pan", cx:ev.clientX, cy:ev.clientY, vx:view.x, vy:view.y };
+  svg.style.cursor = "grabbing";
+}
+
+window.addEventListener("mousemove", ev => {
+  if(!drag.type) return;
+  if(drag.type === "node"){
+    const p = clientToSvg(ev.clientX, ev.clientY);
+    const s = getState(drag.id);
+    if(!s) return;
+    s.x = Math.round((p.x + drag.dx)/5)*5;
+    s.y = Math.round((p.y + drag.dy)/5)*5;
+    drag.moved = true;
+    render();
+  }else if(drag.type === "edge"){
+    const p = clientToSvg(ev.clientX, ev.clientY);
+    const a = getState(drag.fromId);
+    const band = $("#band");
+    if(!a || !band) return;
+
+    const d = Math.hypot(p.x - a.x, p.y - a.y);
+    if(d > R + 16) drag.left = true;              // el puntero salió del nodo origen
+    drag.self = drag.left && d <= R + 8;          // …y ha vuelto: será un bucle
+
+    if(drag.self){
+      // Previsualiza el bucle real, no una recta hacia el propio centro.
+      band.setAttribute("d", edgeGeometry(a, a, false).d);
+      band.classList.add("self");
+    }else{
+      band.setAttribute("d", `M${a.x},${a.y} L${p.x.toFixed(1)},${p.y.toFixed(1)}`);
+      band.classList.remove("self");
+    }
+
+    // Resalta el nodo bajo el cursor (incluido el propio origen) sin re-renderizar.
+    const over = nodeAt(p);
+    for(const g of $$("#gNodes .node"))
+      g.classList.toggle("tgt", !!over && g.dataset.id === over.id);
+  }else if(drag.type === "pan"){
+    const r = svg.getBoundingClientRect();
+    const k = view.w / r.width;
+    view.x = drag.vx - (ev.clientX - drag.cx) * k;
+    view.y = drag.vy - (ev.clientY - drag.cy) * k;
+    applyView();
+  }
+});
+
+window.addEventListener("mouseup", ev => {
+  if(!drag.type) return;
+  if(drag.type === "edge"){
+    const from = drag.fromId;
+    // Si el puntero volvió sobre el nodo de partida, el destino es él mismo (bucle).
+    const target = drag.self ? getState(from)
+                             : (nodeFromEvent(ev) || nodeAt(clientToSvg(ev.clientX, ev.clientY)));
+    endDrag();
+    if(target) openEdgePopover(from, target.id, ev.clientX, ev.clientY);
+    return;
+  }
+  if(drag.type === "node" && drag.moved) save();
+  endDrag();
+});
+
+function endDrag(){
+  const b = $("#band"); if(b) b.remove();
+  drag = { type:null };
+  svg.style.cursor = mode === "add" ? "copy" : mode === "connect" ? "crosshair" : mode === "delete" ? "not-allowed" : "default";
+  render();
+}
+
+/** Fallback de hit-testing por distancia (por si el mouseup cae sobre una arista). */
+function nodeAt(p){
+  for(let i = model.states.length - 1; i >= 0; i--){
+    const s = model.states[i];
+    if(Math.hypot(s.x - p.x, s.y - p.y) <= R + 4) return s;
+  }
+  return null;
+}
+
+/* ==========================================================================
+   7b. PALETA ARRASTRABLE (estado · aceptación · dummy)
+
+   El "estado dummy" es el estado trampa clásico: no acepta y se absorbe a sí
+   mismo con todos los símbolos de Σ, de modo que δ sigue siendo total.
+   ========================================================================== */
+
+const PALETTE_LABEL = { normal:"Estado", accept:"Estado de aceptación", trap:"Estado dummy (trampa)" };
+
+/** Crea el estado que corresponde al tipo soltado en (x,y) del lienzo. */
+function dropPalette(kind, x, y){
+  if(kind === "trap"){
+    const s = addState(x, y, "qtrap", { accepting:false });
+    for(const a of model.alphabet) model.delta[key(s.id, a)] = s.id;   // bucle absorbente
+    commit();
+    toast(model.alphabet.length
+      ? `${s.name} creado: absorbe ${model.alphabet.length} símbolo(s) de Σ`
+      : `${s.name} creado (Σ está vacío: aún no tiene bucles)`, "ok");
+    return s;
+  }
+  const s = addState(x, y, null, { accepting: kind === "accept" });
+  toast(`${PALETTE_LABEL[kind] || "Estado"} ${s.name} creado`, "ok");
+  return s;
+}
+
+/** Punto del lienzo bajo el cursor, o el centro de la vista si no hay evento. */
+function dropPoint(ev){
+  if(ev) return clientToSvg(ev.clientX, ev.clientY);
+  return { x: view.x + view.w/2, y: view.y + view.h/2 };
+}
+
+(function palette(){
+  const wrap = $("#canvasWrap");
+  if(!wrap) return;
+  let kind = null;                       // tipo en vuelo (dataTransfer no es legible en dragover)
+
+  for(const item of $$(".pitem")){
+    item.addEventListener("dragstart", ev => {
+      kind = item.dataset.kind;
+      item.classList.add("dragging");
+      try{
+        ev.dataTransfer.setData("text/plain", kind);
+        ev.dataTransfer.effectAllowed = "copy";
+      }catch(e){ /* algunos navegadores restringen setData */ }
+    });
+    item.addEventListener("dragend", () => { kind = null; item.classList.remove("dragging");
+                                             wrap.classList.remove("dropping"); });
+    // Clic: atajo para colocarlo en el centro de la vista sin arrastrar.
+    item.addEventListener("click", () => {
+      const p = dropPoint(null);
+      dropPalette(item.dataset.kind, p.x, p.y);
+    });
+  }
+
+  wrap.addEventListener("dragover", ev => {
+    if(!kind) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = "copy";
+    wrap.classList.add("dropping");
+  });
+  wrap.addEventListener("dragleave", ev => {
+    if(ev.relatedTarget && wrap.contains(ev.relatedTarget)) return;   // sigue dentro
+    wrap.classList.remove("dropping");
+  });
+  wrap.addEventListener("drop", ev => {
+    let k = kind;
+    try{ k = ev.dataTransfer.getData("text/plain") || kind; }catch(e){ /* usa `kind` */ }
+    if(!k || !PALETTE_LABEL[k]) return;
+    ev.preventDefault();
+    wrap.classList.remove("dropping");
+    const p = dropPoint(ev);
+    dropPalette(k, p.x, p.y);
+    kind = null;
+  });
+})();
+
+/* ==========================================================================
+   8. POPOVERS: símbolos de la arista, menú de nodo, renombrar
+   ========================================================================== */
+
+let popover = null, popoverAnchor = null;
+
+function closePopover(){
+  if(popover){ popover.remove(); popover = null; popoverAnchor = null; }
+  const ri = $("#renameInput"); if(ri) ri.remove();
+}
+document.addEventListener("mousedown", ev => {
+  if(popover && !ev.target.closest(".pop") && !ev.target.closest("#board")) closePopover();
+});
+
+function placePop(pop, cx, cy){
+  pop.style.left = "0px"; pop.style.top = "0px";
+  const r = pop.getBoundingClientRect();
+  const x = Math.min(Math.max(8, cx - r.width/2), innerWidth  - r.width  - 8);
+  const y = Math.min(Math.max(8, cy + 14),        innerHeight - r.height - 8);
+  pop.style.left = x + "px"; pop.style.top = y + "px";
+}
+function positionOpenPopover(){
+  if(popover && popoverAnchor){
+    const c = svgToClient(popoverAnchor.x, popoverAnchor.y);
+    placePop(popover, c.x, c.y);
+  }
+}
+
+/** Panel de símbolos de Σ para la arista from → to. */
+function openEdgePopover(from, to, cx, cy){
+  closePopover();
+  const pop = document.createElement("div");
+  pop.className = "pop";
+
+  const h = document.createElement("h5");
+  h.innerHTML = from === to
+    ? `↺ bucle en <b>${escHtml(nameOf(from))}</b> · símbolos de Σ`
+    : `<b>${escHtml(nameOf(from))}</b> ⟶ <b>${escHtml(nameOf(to))}</b> · símbolos de Σ`;
+  pop.appendChild(h);
+
+  const grid = document.createElement("div");
+  grid.className = "symGrid";
+  if(!model.alphabet.length){
+    grid.innerHTML = '<span class="empty">Σ está vacío: añade símbolos en la barra lateral.</span>';
+  }
+  for(const sym of model.alphabet){
+    const cur = model.delta[key(from, sym)];
+    const b = document.createElement("button");
+    b.className = "sym" + (cur === to ? " on" : cur ? " taken" : "");
+    b.textContent = sym;
+    if(cur && cur !== to){ b.dataset.to = nameOf(cur); b.title = `Ahora δ(${nameOf(from)}, ${sym}) = ${nameOf(cur)}. Clic para reasignar aquí.`; }
+    else b.title = cur === to ? "Clic para quitar este símbolo de la arista" : "Clic para añadir este símbolo";
+    b.onclick = () => {
+      setDelta(from, sym, cur === to ? null : to);
+      openEdgePopover(from, to, cx, cy);
+    };
+    grid.appendChild(b);
+  }
+  pop.appendChild(grid);
+
+  const foot = document.createElement("div");
+  foot.className = "popFoot";
+  const all = document.createElement("button");
+  all.className = "btn sm"; all.textContent = "Todos";
+  all.onclick = () => { for(const s of model.alphabet) model.delta[key(from,s)] = to; commit(); openEdgePopover(from,to,cx,cy); };
+  const del = document.createElement("button");
+  del.className = "btn sm"; del.textContent = "Eliminar arista";
+  del.onclick = () => { removeEdge(from, to); closePopover(); };
+  const cls = document.createElement("button");
+  cls.className = "btn sm"; cls.textContent = "Cerrar";
+  cls.onclick = closePopover;
+  foot.append(all, del, cls);
+  pop.appendChild(foot);
+
+  document.body.appendChild(pop);
+  popover = pop;
+  const a = getState(from), b2 = getState(to);
+  if(a && b2){
+    const g = edgeGeometry(a, b2, false);
+    popoverAnchor = { x:g.lx, y:g.ly };
+  }
+  placePop(pop, cx, cy);
+}
+
+function openNodeMenu(s, cx, cy){
+  closePopover();
+  const pop = document.createElement("div");
+  pop.className = "pop"; pop.style.minWidth = "180px";
+  const h = document.createElement("h5"); h.innerHTML = `<b>${escHtml(s.name)}</b>`;
+  pop.appendChild(h);
+  const mk = (txt, fn) => {
+    const b = document.createElement("button");
+    b.className = "btn sm"; b.style.width = "100%"; b.style.textAlign = "left"; b.style.marginBottom = "4px";
+    b.textContent = txt; b.onclick = () => { fn(); closePopover(); };
+    pop.appendChild(b);
+  };
+  mk(model.initial === s.id ? "✓ Es el estado inicial" : "→ Marcar como inicial", () => { model.initial = s.id; commit(); });
+  mk(s.accepting ? "✓ Es de aceptación (quitar)" : "* Marcar de aceptación", () => { s.accepting = !s.accepting; commit(); });
+  mk("✎ Renombrar", () => setTimeout(() => openRename(s), 0));
+  mk("🗑 Eliminar estado", () => removeState(s.id));
+  document.body.appendChild(pop);
+  popover = pop; popoverAnchor = { x:s.x, y:s.y };
+  placePop(pop, cx, cy);
+}
+
+function openRename(s){
+  closePopover();
+  const inp = document.createElement("input");
+  inp.id = "renameInput"; inp.value = s.name;
+  document.body.appendChild(inp);
+  const c = svgToClient(s.x, s.y);
+  inp.style.left = (c.x - 90) + "px";       // centrado: la mitad del ancho de #renameInput
+  inp.style.top  = (c.y - 21) + "px";
+  inp.select(); inp.focus();
+  let done = false;
+  const commitName = () => { if(done) return; done = true; renameState(s.id, inp.value); inp.remove(); };
+  inp.onkeydown = e => {
+    if(e.key === "Enter"){ e.preventDefault(); commitName(); }
+    else if(e.key === "Escape"){ done = true; inp.remove(); }
+    e.stopPropagation();
+  };
+  inp.onblur = commitName;
+}
+
+const escHtml = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+
+/* ==========================================================================
+   9. TABLA DE TRANSICIÓN
+   ========================================================================== */
+
+function renderTable(){
+  const box = $("#tableBox");
+  box.textContent = "";
+  if(!model.states.length || !model.alphabet.length){
+    box.innerHTML = '<span class="empty">Define al menos un estado y un símbolo de Σ.</span>';
+    return;
+  }
+  const editable = $("#tblEdit").checked;
+  const tbl = document.createElement("table"); tbl.className = "tt";
+
+  const thead = document.createElement("thead");
+  const hr = document.createElement("tr");
+  const th0 = document.createElement("th"); th0.textContent = "δ"; hr.appendChild(th0);
+  for(const sym of model.alphabet){
+    const th = document.createElement("th"); th.textContent = sym; hr.appendChild(th);
+  }
+  thead.appendChild(hr); tbl.appendChild(thead);
+
+  const tb = document.createElement("tbody");
+  for(const s of model.states){
+    const tr = document.createElement("tr");
+    const th = document.createElement("th");
+    th.className = "rowh";
+    th.innerHTML = (s.id === model.initial ? '<span class="mark">→</span>' : "")
+                 + (s.accepting ? '<span class="mark">*</span>' : "")
+                 + escHtml(s.name);
+    tr.appendChild(th);
+
+    for(const sym of model.alphabet){
+      const td = document.createElement("td");
+      const to = model.delta[key(s.id, sym)];
+      td.dataset.from = s.id; td.dataset.sym = sym;
+
+      if(editable){
+        const sel = document.createElement("select");
+        const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "—"; sel.appendChild(o0);
+        for(const t of model.states){
+          const o = document.createElement("option"); o.value = t.id; o.textContent = t.name;
+          if(t.id === to) o.selected = true;
+          sel.appendChild(o);
+        }
+        sel.onchange = () => setDelta(s.id, sym, sel.value || null);
+        td.appendChild(sel);
+      }else{
+        td.textContent = to ? nameOf(to) : "—";
+        if(!to) td.classList.add("undef");
+      }
+
+      if(to){
+        td.onmouseenter = () => { hlEdge = { from:s.id, to }; applyHighlight(); };
+        td.onmouseleave = () => { hlEdge = null; applyHighlight(); };
+      }
+      tr.appendChild(td);
+    }
+    tb.appendChild(tr);
+  }
+  tbl.appendChild(tb);
+  box.appendChild(tbl);
+}
+
+function markCells(){
+  $$("#tableBox td").forEach(td => {
+    const on = hlEdge && td.dataset.from === hlEdge.from && model.delta[key(td.dataset.from, td.dataset.sym)] === hlEdge.to;
+    td.classList.toggle("hl", !!on);
+  });
+}
+
+$("#tblEdit").onchange = renderTable;
+
+// Resaltado inverso: pasar el ratón por una arista marca sus celdas en la tabla.
+gEdges.addEventListener("mouseover", ev => {
+  const g = ev.target.closest(".edge"); if(!g) return;
+  if(hlEdge && hlEdge.from === g.dataset.from && hlEdge.to === g.dataset.to) return;
+  hlEdge = { from:g.dataset.from, to:g.dataset.to };
+  applyHighlight();
+});
+gEdges.addEventListener("mouseout", ev => {
+  if(!ev.target.closest(".edge") || !hlEdge) return;
+  const rel = ev.relatedTarget;
+  if(rel && rel.closest && rel.closest(".edge")) return;   // sigue sobre la misma arista
+  hlEdge = null;
+  applyHighlight();
+});
+
+$("#btnCopyTsv").onclick = () => {
+  const rows = [["delta", ...model.alphabet].join("\t")];
+  for(const s of model.states){
+    const tag = (s.id === model.initial ? "->" : "") + (s.accepting ? "*" : "");
+    rows.push([tag + s.name, ...model.alphabet.map(a => {
+      const t = model.delta[key(s.id, a)]; return t ? nameOf(t) : "-";
+    })].join("\t"));
+  }
+  copyText(rows.join("\n"), "Tabla");
+};
+
+/* ==========================================================================
+   10. EXPORTACIÓN LaTeX / TikZ / prompt
+   ========================================================================== */
+
+const TEX_ESC = { "\\":"\\textbackslash{}", "{":"\\{", "}":"\\}", "$":"\\$", "&":"\\&",
+                  "#":"\\#", "^":"\\textasciicircum{}", "_":"\\_", "%":"\\%", "~":"\\textasciitilde{}" };
+const texEscape = s => String(s).replace(/[\\{}$&#^_%~]/g, c => TEX_ESC[c]);
+
+/** q0 → q_{0}; nombres arbitrarios → \text{...} */
+function texName(name){
+  const m = /^([A-Za-z]+)(\d+)$/.exec(name);
+  if(m) return `${m[1]}_{${m[2]}}`;
+  if(/^[A-Za-z]$/.test(name)) return name;
+  return `\\text{${texEscape(name)}}`;
+}
+function texSym(sym){
+  if(/^[A-Za-z0-9]$/.test(sym)) return sym;
+  return `\\text{${texEscape(sym)}}`;
+}
+const texOf = id => texName(nameOf(id));
+
+function missingPairs(){
+  const out = [];
+  for(const s of model.states)
+    for(const a of model.alphabet)
+      if(!model.delta[key(s.id, a)]) out.push([s.id, a]);
+  return out;
+}
+
+function buildTexArray(){
+  const A = model.alphabet;
+  if(!model.states.length || !A.length) return "% Define estados y símbolos de Σ para generar la tabla.";
+  const lines = [];
+  lines.push(`\\begin{array}{c|${"c".repeat(A.length)}}`);
+  lines.push(`\\delta & ${A.map(texSym).join(" & ")} \\\\ \\hline`);
+  model.states.forEach((s, i) => {
+    const tag = (s.id === model.initial ? "\\to " : "") + (s.accepting ? "{*}" : "");
+    const cells = A.map(a => {
+      const t = model.delta[key(s.id, a)];
+      return t ? texOf(t) : "\\bot";
+    });
+    lines.push(`${tag}${texName(s.name)} & ${cells.join(" & ")}${i < model.states.length-1 ? " \\\\" : ""}`);
+  });
+  lines.push(`\\end{array}`);
+  return lines.join("\n");
+}
+
+function buildTexFull(){
+  if(!model.states.length) return "% El autómata está vacío: crea algunos estados.";
+  const Q = model.states.map(s => texName(s.name)).join(", ");
+  const S = model.alphabet.map(texSym).join(", ");
+  const F = model.states.filter(s => s.accepting).map(s => texName(s.name));
+  const q0 = model.initial ? texOf(model.initial) : "\\text{(sin definir)}";
+  const miss = missingPairs();
+
+  const out = [];
+  out.push("% Autómata finito determinista — generado con dfa-editor.html");
+  if(model.language.trim())
+    out.push(...model.language.trim().split("\n").map(l => "% Lenguaje objetivo: " + l));
+  out.push("");
+  out.push("Sea $M = (Q, \\Sigma, \\delta, q_0, F)$ el autómata finito determinista con");
+  out.push("\\[");
+  out.push(`  Q = \\{ ${Q} \\}, \\qquad`);
+  out.push(`  \\Sigma = \\{ ${S} \\}, \\qquad`);
+  out.push(`  q_0 = ${q0}, \\qquad`);
+  out.push(`  F = ${F.length ? "\\{ " + F.join(", ") + " \\}" : "\\varnothing"}.`);
+  out.push("\\]");
+  out.push("");
+  out.push("La función de transición $\\delta : Q \\times \\Sigma \\to Q$ viene dada por la tabla");
+  out.push("\\[");
+  out.push(buildTexArray().split("\n").map(l => "  " + l).join("\n"));
+  out.push("\\]");
+  out.push("donde $\\to$ marca el estado inicial y $*$ los estados de aceptación.");
+  if(miss.length){
+    out.push("");
+    out.push(`% ATENCIÓN: δ es parcial. Faltan ${miss.length} par(es) (q,a); se indican con \\bot.`);
+    out.push(`% Un DFA completo exige que δ esté definida para todo (q,a) ∈ Q × Σ.`);
+  }
+  out.push("");
+  out.push("Explícitamente:");
+  out.push("\\begin{align*}");
+  const eqs = [];
+  for(const s of model.states)
+    for(const a of model.alphabet){
+      const t = model.delta[key(s.id, a)];
+      eqs.push(`  \\delta(${texName(s.name)}, ${texSym(a)}) &= ${t ? texOf(t) : "\\bot"}`);
+    }
+  out.push(eqs.join(" \\\\\n"));
+  out.push("\\end{align*}");
+  return out.join("\n");
+}
+
+function buildTikz(){
+  if(!model.states.length) return "% El autómata está vacío.";
+  const K = 78;                                   // px por cm
+  const xs = model.states.map(s => s.x), ys = model.states.map(s => s.y);
+  const ox = (Math.min(...xs) + Math.max(...xs))/2, oy = (Math.min(...ys) + Math.max(...ys))/2;
+  const edges = deriveEdges();
+  const present = new Set(edges.map(e => e.from + SEP + e.to));
+
+  const out = [];
+  out.push("% Requiere: \\usepackage{tikz} y \\usetikzlibrary{automata,positioning,arrows.meta}");
+  out.push("\\begin{tikzpicture}[shorten >=1pt, node distance=2.6cm, on grid, auto,");
+  out.push("                     every state/.style={minimum size=1.1cm}]");
+  for(const s of model.states){
+    const opts = ["state"];
+    if(s.id === model.initial) opts.push("initial", "initial where=left");
+    if(s.accepting) opts.push("accepting");
+    const x = ((s.x - ox)/K).toFixed(2), y = (-(s.y - oy)/K).toFixed(2);
+    out.push(`  \\node[${opts.join(",")}] (${s.id}) at (${x},${y}) {$${texName(s.name)}$};`);
+  }
+  out.push("  \\path[->]");
+  const body = edges.map(e => {
+    const lbl = e.symbols.map(texSym).join(",");
+    if(e.from === e.to)
+      return `    (${e.from}) edge [loop above] node {$${lbl}$} ()`;
+    const bend = present.has(e.to + SEP + e.from) ? " [bend left=25]" : "";
+    return `    (${e.from}) edge${bend} node {$${lbl}$} (${e.to})`;
+  });
+  out.push(body.join("\n") + ";");
+  out.push("\\end{tikzpicture}");
+  return out.join("\n");
+}
+
+function buildPrompt(){
+  const L = model.language.trim() || "(describe aquí el lenguaje objetivo en el panel lateral)";
+  const miss = missingPairs();
+  const out = [];
+  out.push("Te paso un autómata finito determinista M descrito en LaTeX.");
+  out.push("");
+  out.push("--- AUTÓMATA ---");
+  out.push(buildTexFull());
+  out.push("--- FIN DEL AUTÓMATA ---");
+  out.push("");
+  out.push("El lenguaje que M debería reconocer es:");
+  out.push("");
+  out.push("  L = " + L.replace(/^L\s*=\s*/i, ""));
+  out.push("");
+  out.push("Tareas:");
+  out.push("1. Describe con precisión el lenguaje L(M) que realmente reconoce M");
+  out.push("   (di qué invariante caracteriza a cada estado alcanzable).");
+  out.push("2. Determina si L(M) = L.");
+  out.push("3. Si NO son iguales, dame la cadena de CONTRAEJEMPLO MÁS CORTA e indica");
+  out.push("   si es un falso positivo (w ∈ L(M) pero w ∉ L) o un falso negativo");
+  out.push("   (w ∈ L pero w ∉ L(M)). Muestra la traza de estados de esa cadena.");
+  out.push("4. Si son iguales, da un argumento de corrección por inducción sobre |w|");
+  out.push("   usando los invariantes del punto 1.");
+  if(miss.length){
+    out.push("");
+    out.push(`NOTA: δ es parcial — faltan ${miss.length} par(es) (q,a), marcados con \\bot.`);
+    out.push("Trata cualquier transición indefinida como rechazo inmediato, y señálalo");
+    out.push("como un defecto de la construcción.");
+  }
+  out.push("");
+  out.push("Responde en español y sé conciso: primero el veredicto, luego la justificación.");
+  return out.join("\n");
+}
+
+/**
+ * Prompt para que un LLM con visión transcriba un diagrama dibujado a mano
+ * a la quíntupla que entiende `parseQuintuple`.
+ *
+ * Insiste en transcribir el dibujo tal cual: si el LLM "arregla" el autómata
+ * al leerlo, la evaluación posterior de los requisitos de diseño no vale nada.
+ */
+function buildVisionPrompt(){
+  const out = [];
+  out.push("Te adjunto la foto de un diagrama de estados dibujado a mano.");
+  out.push("Transcríbelo a la quíntupla de un autómata finito determinista (AFD)");
+  out.push("con el formato exacto que te indico más abajo.");
+  out.push("");
+  out.push("REGLA PRINCIPAL");
+  out.push("Transcribe lo que está dibujado, no lo que crees que debería estar.");
+  out.push("No corrijas errores, no completes transiciones que falten, no inventes");
+  out.push("estados ni símbolos. Si el dibujo está incompleto o es incorrecto, quiero");
+  out.push("que se note: el objetivo es evaluar después si el diseño cumple los");
+  out.push("requisitos, y eso es imposible si tú lo arreglas por el camino.");
+  out.push("");
+  out.push("CÓMO LEER EL DIBUJO");
+  out.push("· Círculo simple = estado normal.");
+  out.push("· Círculo doble = estado de aceptación (va en F).");
+  out.push("· Flecha suelta que entra sin salir de ningún estado = marca el inicial q0.");
+  out.push("· Flecha de A a B etiquetada «x» = δ(A, x) = B.");
+  out.push("· Etiqueta con varios símbolos («a, b») = una transición por símbolo, todas");
+  out.push("  al mismo destino.");
+  out.push("· Lazo que sale de un círculo y vuelve a él = transición del estado a sí mismo.");
+  out.push("· Si un estado no tiene nombre legible, llámalo q0, q1, q2… en orden de");
+  out.push("  lectura (izquierda a derecha, arriba abajo) y avísame de ello.");
+  out.push("");
+  out.push("FORMATO DE SALIDA (respétalo al carácter)");
+  out.push("");
+  out.push("Q = {q0, q1, q2}");
+  out.push("Σ = {a, b}");
+  out.push("q0 = q0");
+  out.push("F = {q2}");
+  out.push("δ(q0, a) = q1");
+  out.push("δ(q0, b) = q0");
+  out.push("δ(q1, a) = q1");
+  out.push("δ(q1, b) = q2");
+  out.push("δ(q2, a) = q1");
+  out.push("δ(q2, b) = q0");
+  out.push("");
+  out.push("REGLAS DEL FORMATO");
+  out.push("· Una transición por línea, con la forma  δ(estado, símbolo) = estado");
+  out.push("· Q, Σ, q0 y F van primero, una por línea. Si no hay aceptación, F = {}");
+  out.push("· Nombres sin espacios ni subíndices: escribe q0, no q₀ ni q_0.");
+  out.push("· Devuelve SOLO ese bloque de texto: nada de ``` ni explicaciones alrededor.");
+  out.push("· Si necesitas comentar algo, ponlo al final en líneas que empiecen por «%»;");
+  out.push("  el programa que lee esto las ignora, así que no rompen nada.");
+  out.push("");
+  out.push("QUÉ DEBES AVISARME (en esas líneas con %)");
+  out.push("· Símbolos o nombres que no se leen bien, y qué has supuesto.");
+  out.push("· Pares (estado, símbolo) que no aparecen en el dibujo: NO los inventes,");
+  out.push("  simplemente dime cuáles faltan.");
+  out.push("· Dos flechas que salgan del mismo estado con el mismo símbolo hacia destinos");
+  out.push("  distintos: transcribe la que se vea con más claridad y avísame, porque eso");
+  out.push("  rompe el determinismo y no es un AFD válido.");
+  out.push("· Si hay más de un estado inicial, o ninguno.");
+
+  // Pistas opcionales: sólo para desambiguar la lectura, nunca para reescribir el dibujo.
+  const hints = [];
+  if(model.alphabet.length)
+    hints.push(`· El alfabeto que espero es Σ = {${model.alphabet.join(", ")}}.`);
+  if(model.language.trim())
+    hints.push(`· El autómata debería reconocer L = ${model.language.trim().replace(/\s+/g," ").replace(/^L\s*=\s*/i,"")}`);
+  if(hints.length){
+    out.push("");
+    out.push("PISTAS (úsalas SÓLO para resolver dudas de lectura del dibujo,");
+    out.push("nunca para cambiar lo que está dibujado)");
+    out.push(...hints);
+  }
+  return out.join("\n");
+}
+
+let texKind = "full";
+$$(".subtab").forEach(b => b.onclick = () => {
+  texKind = b.dataset.tex;
+  $$(".subtab").forEach(o => o.classList.toggle("on", o === b));
+  renderTex();
+});
+
+function currentTex(){
+  return texKind === "array"  ? buildTexArray()
+       : texKind === "tikz"   ? buildTikz()
+       : texKind === "prompt" ? buildPrompt()
+       : texKind === "vision" ? buildVisionPrompt()
+       : buildTexFull();
+}
+function renderTex(){ $("#texOut").textContent = currentTex(); }
+$("#btnCopyTex").onclick = () => copyText(currentTex(),
+  texKind === "prompt" || texKind === "vision" ? "Prompt"
+  : texKind === "tikz" ? "TikZ" : "LaTeX");
+
+/* ==========================================================================
+   11. SIMULADOR
+   ========================================================================== */
+
+let sim = { active:false, tokens:[], steps:[], idx:0, cursorState:null, status:null, errAt:-1 };
+
+/** Tokeniza por coincidencia más larga (permite símbolos multicarácter). */
+function tokenize(str){
+  const s = str.replace(/\s+/g, "");
+  const syms = [...model.alphabet].filter(Boolean).sort((a,b) => b.length - a.length);
+  const tokens = [];
+  let i = 0;
+  while(i < s.length){
+    const m = syms.find(sym => s.startsWith(sym, i));
+    if(!m) return { tokens, badAt:i };
+    tokens.push(m); i += m.length;
+  }
+  return { tokens, badAt:-1 };
+}
+
+/** Ejecuta la cadena; devuelve pasos y veredicto. */
+function runTokens(tokens){
+  const steps = [];
+  if(!model.initial) return { steps, status:"noinit" };
+  let cur = model.initial;
+  for(const a of tokens){
+    const next = model.delta[key(cur, a)];
+    if(!next) return { steps, status:"undef", stuckAt:cur, stuckSym:a };
+    steps.push({ from:cur, sym:a, to:next });
+    cur = next;
+  }
+  const s = getState(cur);
+  return { steps, status: s && s.accepting ? "accept" : "reject", final:cur };
+}
+
+function refreshSim(){
+  if(!sim.active) return;
+  runSimulation(false);
+}
+
+function runSimulation(resetIdx){
+  const raw = $("#simInput").value;
+  const { tokens, badAt } = tokenize(raw);
+  sim.tokens = tokens;
+  sim.errAt = badAt;
+
+  if(badAt >= 0){
+    sim.active = true; sim.steps = []; sim.idx = 0; sim.cursorState = null; sim.status = "badsym";
+    paintSim(raw); render(); return;
+  }
+  const r = runTokens(tokens);
+  sim.steps = r.steps; sim.status = r.status;
+  sim.stuckSym = r.stuckSym; sim.stuckAt = r.stuckAt;
+  sim.active = true;
+  const max = r.steps.length;
+  if(resetIdx || sim.idx > max) sim.idx = Math.min(sim.idx, max);
+  sim.cursorState = sim.idx === 0 ? model.initial : (r.steps[sim.idx-1] || {}).to;
+  paintSim(raw);
+  render();
+}
+
+function paintSim(raw){
+  const V = $("#simVerdict"), T = $("#simTape"), TR = $("#simTrace");
+  const atEnd = sim.idx >= sim.tokens.length;
+
+  if(sim.status === "badsym"){
+    V.innerHTML = '<span class="verdict err">Símbolo fuera de Σ</span>';
+    T.innerHTML = `<span class="done">${escHtml(raw.slice(0, sim.errAt))}</span>` +
+                  `<span class="now">${escHtml(raw[sim.errAt] || "?")}</span>` +
+                  escHtml(raw.slice(sim.errAt + 1));
+    TR.innerHTML = `<span class="dim">El carácter en la posición ${sim.errAt + 1} no corresponde a ningún símbolo de Σ = {${escHtml(model.alphabet.join(", "))}}.</span>`;
+    return;
+  }
+  if(!model.initial){
+    V.innerHTML = '<span class="verdict err">Sin estado inicial</span>';
+    T.textContent = ""; TR.innerHTML = '<span class="dim">Marca un estado como inicial (→) para poder simular.</span>';
+    return;
+  }
+
+  // cinta
+  T.innerHTML = sim.tokens.length
+    ? sim.tokens.map((t, i) =>
+        i < sim.idx ? `<span class="done">${escHtml(t)}</span>`
+        : i === sim.idx ? `<span class="now">${escHtml(t)}</span>`
+        : escHtml(t)).join("")
+    : '<span class="done">ε (cadena vacía)</span>';
+
+  // traza
+  const parts = [`<span class="${sim.idx===0?"cur":"dim"}">${escHtml(nameOf(model.initial))}</span>`];
+  sim.steps.slice(0, sim.idx).forEach((st, i) => {
+    parts.push(` <span class="sym">──${escHtml(st.sym)}──▶</span> `);
+    parts.push(`<span class="${i===sim.idx-1?"cur":"dim"}">${escHtml(nameOf(st.to))}</span>`);
+  });
+  if(sim.idx < sim.steps.length) parts.push(' <span class="dim">…</span>');
+  TR.innerHTML = parts.join("");
+
+  // veredicto (sólo definitivo cuando se ha consumido toda la cadena)
+  if(sim.status === "undef"){
+    V.innerHTML = `<span class="verdict err">Rechaza — δ(${escHtml(nameOf(sim.stuckAt))}, ${escHtml(sim.stuckSym)}) indefinida</span>`;
+  }else if(!atEnd){
+    V.innerHTML = `<span class="verdict err" style="background:none;border-color:var(--line);color:var(--fg2)">paso ${sim.idx} / ${sim.tokens.length}</span>`;
+  }else if(sim.status === "accept"){
+    V.innerHTML = '<span class="verdict acc">✓ Acepta</span>';
+  }else{
+    V.innerHTML = '<span class="verdict rej">✗ Rechaza</span>';
+  }
+}
+
+$("#simInput").addEventListener("input", () => { sim.idx = 0; runSimulation(true); });
+$("#simFirst").onclick = () => { sim.idx = 0; runSimulation(false); };
+$("#simPrev").onclick  = () => { sim.idx = Math.max(0, sim.idx - 1); runSimulation(false); };
+$("#simNext").onclick  = () => { sim.idx = Math.min(sim.steps.length, sim.idx + 1); runSimulation(false); };
+$("#simEnd").onclick   = () => { runSimulation(true); sim.idx = sim.steps.length; runSimulation(false); };
+
+$("#btnBatch").onclick = () => {
+  const lines = $("#batchInput").value.split("\n");
+  const box = $("#batchOut");
+  box.textContent = "";
+  if(!lines.length) return;
+  const tbl = document.createElement("table"); tbl.className = "batch";
+  tbl.innerHTML = "<thead><tr><th>cadena</th><th>resultado</th><th>traza</th></tr></thead>";
+  const tb = document.createElement("tbody");
+  for(const raw of lines){
+    const { tokens, badAt } = tokenize(raw);
+    const tr = document.createElement("tr");
+    const c1 = document.createElement("td");
+    c1.textContent = raw.trim() === "" ? "ε" : raw.trim();
+    const c2 = document.createElement("td");
+    const c3 = document.createElement("td");
+    if(badAt >= 0){
+      c2.className = "e"; c2.textContent = "símbolo fuera de Σ";
+      c3.textContent = `pos. ${badAt + 1}`;
+    }else{
+      const r = runTokens(tokens);
+      if(r.status === "accept"){ c2.className = "a"; c2.textContent = "acepta"; }
+      else if(r.status === "undef"){ c2.className = "e"; c2.textContent = `δ(${nameOf(r.stuckAt)}, ${r.stuckSym}) indefinida`; }
+      else if(r.status === "noinit"){ c2.className = "e"; c2.textContent = "sin estado inicial"; }
+      else { c2.className = "r"; c2.textContent = "rechaza"; }
+      c3.textContent = model.initial
+        ? nameOf(model.initial) + r.steps.map(s => ` -${s.sym}-> ` + nameOf(s.to)).join("")
+        : "";
+    }
+    tr.append(c1, c2, c3); tb.appendChild(tr);
+  }
+  tbl.appendChild(tb); box.appendChild(tbl);
+};
+
+/* ==========================================================================
+   12. VALIDACIÓN
+   ========================================================================== */
+
+function analyze(){
+  const issues = [];
+  const miss = missingPairs();
+
+  if(!model.states.length) issues.push({ lv:"err", ic:"!", html:"No hay estados: <code>Q = ∅</code>." });
+  if(!model.alphabet.length) issues.push({ lv:"err", ic:"!", html:"El alfabeto <code>Σ</code> está vacío." });
+  if(!model.initial && model.states.length)
+    issues.push({ lv:"err", ic:"!", html:"No hay <b>estado inicial</b>. Marca uno con <code>→</code>." });
+
+  if(miss.length){
+    const shown = miss.slice(0, 12).map(([q,a]) => `<code>(${escHtml(nameOf(q))}, ${escHtml(a)})</code>`).join(" ");
+    issues.push({ lv:"err", ic:"!", html:
+      `<b>δ no es total</b>: faltan ${miss.length} par(es) de <code>Q × Σ</code>. ` +
+      `Un DFA exige δ definida para todos. ${shown}${miss.length > 12 ? " …" : ""}` });
+  }
+
+  const F = model.states.filter(s => s.accepting);
+  if(model.states.length && !F.length)
+    issues.push({ lv:"warn", ic:"?", html:"No hay estados de aceptación: <code>F = ∅</code>, así que <code>L(M) = ∅</code>." });
+
+  // alcanzables desde q0
+  if(model.initial){
+    const seen = new Set([model.initial]), stack = [model.initial];
+    while(stack.length){
+      const q = stack.pop();
+      for(const a of model.alphabet){
+        const t = model.delta[key(q, a)];
+        if(t && !seen.has(t)){ seen.add(t); stack.push(t); }
+      }
+    }
+    const un = model.states.filter(s => !seen.has(s.id));
+    if(un.length)
+      issues.push({ lv:"warn", ic:"?", html:
+        `<b>${un.length} estado(s) inalcanzable(s)</b> desde <code>${escHtml(nameOf(model.initial))}</code>: ` +
+        un.map(s => `<code>${escHtml(s.name)}</code>`).join(" ") + ". No afectan a L(M); puedes eliminarlos." });
+
+    // co-alcanzables (desde los que se llega a F)
+    const rev = new Map(model.states.map(s => [s.id, []]));
+    for(const k in model.delta){
+      const [from] = unkey(k); const to = model.delta[k];
+      if(rev.has(to)) rev.get(to).push(from);
+    }
+    const co = new Set(F.map(s => s.id)), st2 = [...co];
+    while(st2.length){
+      const q = st2.pop();
+      for(const p of (rev.get(q) || [])) if(!co.has(p)){ co.add(p); st2.push(p); }
+    }
+    const dead = model.states.filter(s => seen.has(s.id) && !co.has(s.id));
+    if(dead.length)
+      issues.push({ lv:"warn", ic:"?", html:
+        `<b>${dead.length} estado(s) muerto(s)</b> (desde ellos nunca se alcanza <code>F</code>): ` +
+        dead.map(s => `<code>${escHtml(s.name)}</code>`).join(" ") +
+        ". Es correcto si actúan como estado trampa." });
+  }
+
+  const errs  = issues.filter(i => i.lv === "err").length;
+  const warns = issues.filter(i => i.lv === "warn").length;
+  if(!errs && model.states.length)
+    issues.unshift({ lv:"ok", ic:"✓", html:
+      "<b>Es un DFA válido</b>: δ es una función total <code>Q × Σ → Q</code>, hay un único estado inicial y el determinismo está garantizado por construcción." });
+  return { issues, errs, warns };
+}
+
+function renderValidation(){
+  const { issues, errs, warns } = analyze();
+  const box = $("#valOut");
+  box.textContent = "";
+  for(const i of issues){
+    const d = document.createElement("div");
+    d.className = "issue " + i.lv;
+    d.innerHTML = `<span class="ic">${i.ic}</span><span class="bd">${i.html}</span>`;
+    box.appendChild(d);
+  }
+  const b = $("#valBadge");
+  b.textContent = errs || warns || "0";
+  b.className = "badge " + (errs ? "" : warns ? "warn" : "ok");
+  $("#btnTrap").style.display = missingPairs().length ? "" : "none";
+}
+
+$("#btnTrap").onclick = () => {
+  const miss = missingPairs();
+  if(!miss.length) return;
+  let trap = model.states.find(s => s.name === "qtrap");
+  if(!trap){
+    const xs = model.states.map(s => s.x), ys = model.states.map(s => s.y);
+    trap = { id:newId(), name:"qtrap", accepting:false,
+             x: xs.length ? Math.round((Math.min(...xs)+Math.max(...xs))/2) : 400,
+             y: ys.length ? Math.max(...ys) + 130 : 300 };
+    model.states.push(trap);
+  }
+  for(const [q, a] of miss) model.delta[key(q, a)] = trap.id;
+  for(const a of model.alphabet) model.delta[key(trap.id, a)] = trap.id;
+  commit();
+  toast(`δ completada: ${miss.length} transición(es) redirigidas a qtrap`, "ok");
+};
+
+/* ==========================================================================
+   13. PERSISTENCIA E IMPORT/EXPORT
+   ========================================================================== */
+
+/** Forma exportable: δ anidada { q : { a : q' } }, legible al abrir el .json. */
+function serializeModel(){
+  const delta = {};
+  for(const k in model.delta){
+    const [f, a] = unkey(k);
+    (delta[f] = delta[f] || {})[a] = model.delta[k];
+  }
+  return Object.assign({}, model, { delta });
+}
+
+function save(){
+  try{ localStorage.setItem(STORE_KEY, JSON.stringify(serializeModel())); }
+  catch(e){ /* navegación privada o cuota llena */ }
+}
+
+function loadModel(obj){
+  if(!obj || !Array.isArray(obj.states)) throw new Error("formato no reconocido");
+  model = {
+    formatVersion: 1,
+    alphabet: Array.isArray(obj.alphabet) ? obj.alphabet.map(String) : [],
+    states: obj.states.map(s => ({ id:String(s.id), name:String(s.name),
+                                   x:Number(s.x)||0, y:Number(s.y)||0, accepting:!!s.accepting })),
+    initial: obj.initial ? String(obj.initial) : null,
+    delta: {},
+    language: typeof obj.language === "string" ? obj.language : ""
+  };
+  // Se descarta toda transición que apunte a estados o símbolos inexistentes.
+  const ids = new Set(model.states.map(s => s.id));
+  const put = (f, a, t) => {
+    t = String(t);
+    if(ids.has(f) && ids.has(t) && model.alphabet.includes(a)) model.delta[key(f, a)] = t;
+  };
+  const d = obj.delta || {};
+  for(const k in d){
+    const v = d[k];
+    if(v && typeof v === "object") for(const a in v) put(k, a, v[a]);   // δ anidada
+    else { const [f, a] = unkey(k); put(f, a, v); }                     // δ plana (heredada)
+  }
+  if(model.initial && !ids.has(model.initial)) model.initial = null;
+  seq = model.states.reduce((m, s) => Math.max(m, parseInt(String(s.id).replace(/\D/g,""), 10) || 0), 0);
+  selectedId = null;
+  sim = { active:false, tokens:[], steps:[], idx:0, cursorState:null, status:null, errAt:-1 };
+  $("#langInput").value = model.language;
+  commit();
+}
+
+$("#btnSaveJson").onclick = () => {
+  download("dfa.json", JSON.stringify(serializeModel(), null, 2), "application/json");
+  toast("dfa.json descargado", "ok");
+};
+$("#btnLoadJson").onclick = () => $("#fileInput").click();
+$("#fileInput").onchange = ev => {
+  const f = ev.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try{ loadModel(JSON.parse(r.result)); toast("Autómata cargado", "ok"); fitView(); }
+    catch(e){ toast("No se pudo leer el archivo: " + e.message, "err"); }
+  };
+  r.readAsText(f);
+  ev.target.value = "";
+};
+
+$("#btnClear").onclick = async () => {
+  if(!await confirmBox("Se eliminarán todos los estados y transiciones.\nΣ y el lenguaje objetivo se conservan. ¿Continuar?")) return;
+  model.states = []; model.delta = {}; model.initial = null;
+  selectedId = null; seq = 0;
+  commit();
+};
+
+/* ==========================================================================
+   13b. QUÍNTUPLA → AUTÓMATA
+   Convierte una descripción textual de M = (Q, Σ, δ, q0, F) en un modelo.
+   El parser es deliberadamente permisivo: acepta varias notaciones de δ,
+   una tabla, y deduce Q y Σ cuando no se declaran.
+   ========================================================================== */
+
+const TUPLE_EXAMPLE = [
+  "Q = {q0, q1, q2}",
+  "Σ = {a, b}",
+  "q0 = q0",
+  "F = {q2}",
+  "L = { w ∈ {a,b}* : w termina en ab }",
+  "",
+  "δ(q0, a) = q1",
+  "δ(q0, b) = q0",
+  "δ(q1, a) = q1",
+  "δ(q1, b) = q2",
+  "δ(q2, a) = q1",
+  "δ(q2, b) = q0"
+].join("\n");
+
+const deaccent = s => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "");
+/** Clave normalizada del lado izquierdo de una asignación: «Σ», «\Sigma », «sigma» → «sigma». */
+const normKey = s => deaccent(s).toLowerCase().replace(/[\\\s_{}()$.·]/g, "").replace(/₀/g, "0");
+
+/** Limpia un nombre: quita $…$ de LaTeX y convierte q_{0} / q_0 en q0. */
+function cleanName(s){
+  return String(s).replace(/\$/g, "").replace(/\\text\s*\{([^}]*)\}/g, "$1")
+                  .replace(/_\{(\d+)\}/g, "$1").replace(/_(\d+)/g, "$1").trim();
+}
+
+/** «{a, b}» · «a b» · «a,b» · «∅» → lista de tokens. */
+function parseSet(raw){
+  let s = String(raw).trim().replace(/^\\?\{/, "").replace(/\\?\}$/, "").trim();
+  if(!s || /^(∅|\{\}|\\emptyset|\\varnothing|vacio|-)$/i.test(deaccent(s).toLowerCase())) return [];
+  return s.split(/[,;]+|\s+/).map(t => cleanName(t)).filter(Boolean);
+}
+
+/** Divide por comas de nivel superior, respetando (), {} y []. */
+function splitTop(s){
+  const out = []; let depth = 0, cur = "";
+  for(const ch of String(s)){
+    if("({[".includes(ch)) depth++;
+    else if(")}]".includes(ch)) depth = Math.max(0, depth - 1);
+    if(ch === "," && depth === 0){ out.push(cur); cur = ""; }
+    else cur += ch;
+  }
+  out.push(cur);
+  return out.map(x => x.trim()).filter(Boolean);
+}
+
+// El orden importa: las alternativas largas van primero, si no «=» se comería
+// el primer carácter de «=>» y dejaría «> destino» como nombre de estado.
+const ARROW = "(?:-->|->|=>|→|⟶|↦|=|:)";
+const RX_DELTA_FN    = new RegExp(`^(?:δ|Δ|d|delta|\\\\delta)\\s*\\(\\s*([^,()]+?)\\s*,\\s*([^,()]+?)\\s*\\)\\s*${ARROW}\\s*(.+)$`, "i");
+const RX_DELTA_PAIR  = new RegExp(`^\\(\\s*([^,()]+?)\\s*,\\s*([^,()]+?)\\s*\\)\\s*${ARROW}\\s*(.+)$`);
+const RX_DELTA_COMMA = new RegExp(`^([^,()=]+?)\\s*,\\s*([^,()=]+?)\\s*${ARROW}\\s*(.+)$`);
+const RX_DELTA_SPACE = /^(\S+)\s+(\S+)\s*(?:-->|->|=>|→|⟶|↦)\s*(\S+)$/;
+const RX_DELTA_BARE  = /^(\S+)\s+(\S+)\s+(\S+)$/;
+
+const UNDEF_CELL = new Set(["", "-", "--", "—", "–", "∅", "⊥", "bot", "\\bot", "?"]);
+
+const KEY_ROUTE = {
+  q:"Q", estados:"Q", states:"Q", conjuntodeestados:"Q",
+  σ:"S", sigma:"S", alfabeto:"S", alphabet:"S", simbolos:"S",
+  q0:"q0", qo:"q0", inicial:"q0", estadoinicial:"q0", initial:"q0", start:"q0", s0:"q0",
+  f:"F", final:"F", finales:"F", aceptacion:"F", aceptados:"F", accepting:"F",
+  estadosfinales:"F", estadosdeaceptacion:"F",
+  l:"L", lm:"L", lenguaje:"L", language:"L", lenguajeobjetivo:"L",
+  m:"M", automata:"M", dfa:"M", afd:"M"
+};
+
+/**
+ * Analiza el texto de una quíntupla.
+ * @returns {{ok:boolean, errors:string[], warns:string[], spec:object}}
+ */
+function parseQuintuple(text){
+  const errors = [], warns = [];
+  const decl = { Q:null, S:null, q0:null, F:null, L:null };
+  const trans = [];                 // { from, sym, to, ln }
+  const tableRows = [];             // { cells, ln }
+  const symOrder = [], stateOrder = [], tableAccept = [];
+  const pushSym   = a => { if(a && !symOrder.includes(a))   symOrder.push(a); };
+  const pushState = q => { if(q && !stateOrder.includes(q)) stateOrder.push(q); };
+
+  const splitRow = l => l.split(/\s*\|\s*|\t+/).map(c => c.trim())
+                         .filter((c, i, arr) => !(c === "" && (i === 0 || i === arr.length - 1)));
+
+  const lines = String(text || "").split(/\r?\n/);
+
+  lines.forEach((rawLine, i) => {
+    const ln = i + 1;
+    let l = rawLine.trim().replace(/\\\\\s*$/, "").replace(/[;,]\s*$/, "").trim();
+    // Los LLM suelen envolver la respuesta en ``` y prefijar las líneas con viñetas.
+    if(/^```/.test(l)) return;
+    l = l.replace(/^[-•·]\s+/, "").trim();
+    if(!l || /^(%|\/\/)/.test(l)) return;
+    if(/^(δ|Δ|d|delta|transiciones|transitions)\s*:?\s*$/i.test(l)) return;   // encabezado suelto
+
+    if(/[|\t]/.test(l)){ tableRows.push({ cells:splitRow(l), ln }); return; }
+
+    let m = RX_DELTA_FN.exec(l) || RX_DELTA_PAIR.exec(l) || RX_DELTA_COMMA.exec(l)
+         || RX_DELTA_SPACE.exec(l) || (!l.includes("=") ? RX_DELTA_BARE.exec(l) : null);
+    if(m){
+      const from = cleanName(m[1]), sym = cleanName(m[2]), to = cleanName(m[3]);
+      if(from && sym && to){
+        trans.push({ from, sym, to, ln });
+        pushState(from); pushState(to); pushSym(sym);
+        return;
+      }
+    }
+
+    const asg = /^([^=:]+?)\s*[=:]\s*(.*)$/.exec(l);
+    if(asg){
+      const route = KEY_ROUTE[normKey(asg[1])];
+      const val = asg[2].trim();
+      if(route === "M"){                       // M = ({q0,q1}, {a,b}, δ, q0, {q1})
+        const parts = splitTop(val.replace(/^\(/, "").replace(/\)$/, ""));
+        const useful = parts.filter(p => !/^(δ|Δ|d|delta|\\delta)$/i.test(p.trim()));
+        if(useful.length >= 4){
+          decl.Q = parseSet(useful[0]); decl.S = parseSet(useful[1]);
+          decl.q0 = (parseSet(useful[2])[0] || null); decl.F = parseSet(useful[3]);
+        }else{
+          errors.push(`Línea ${ln}: la tupla M debe tener la forma (Q, Σ, δ, q0, F).`);
+        }
+        return;
+      }
+      if(route === "L"){ decl.L = val; return; }
+      if(route === "q0"){ decl.q0 = parseSet(val)[0] || null; return; }
+      if(route === "Q"){ decl.Q = parseSet(val); return; }
+      if(route === "S"){ decl.S = parseSet(val); return; }
+      if(route === "F"){ decl.F = parseSet(val); return; }
+      errors.push(`Línea ${ln}: no reconozco «${asg[1].trim()}». Usa Q, Σ, q0, F, L o una transición.`);
+      return;
+    }
+
+    errors.push(`Línea ${ln}: no entiendo «${l}».`);
+  });
+
+  /* ---- tabla δ ---- */
+  if(tableRows.length){
+    const head = tableRows[0];
+    const headSyms = head.cells.slice(1).map(cleanName).filter(Boolean);
+    if(!headSyms.length){
+      errors.push(`Línea ${head.ln}: la cabecera de la tabla no declara ningún símbolo.`);
+    }else{
+      headSyms.forEach(pushSym);
+      for(const row of tableRows.slice(1)){
+        let nm = row.cells[0] || "", init = false, acc = false, mm;
+        while((mm = /^\s*(\\to|\\rightarrow|->|-->|→|⟶|\*|\+)/.exec(nm))){
+          if(mm[1] === "*" || mm[1] === "+") acc = true; else init = true;
+          nm = nm.slice(mm[0].length);
+        }
+        nm = cleanName(nm);
+        if(!nm){ errors.push(`Línea ${row.ln}: falta el nombre del estado en la primera columna.`); continue; }
+        pushState(nm);
+        if(init && !decl.q0) decl.q0 = nm;
+        if(acc && !tableAccept.includes(nm)) tableAccept.push(nm);
+        if(row.cells.length - 1 > headSyms.length)
+          warns.push(`Línea ${row.ln}: la fila tiene más celdas que símbolos; sobran las últimas.`);
+        headSyms.forEach((sym, ci) => {
+          const cell = cleanName(row.cells[ci + 1] || "");
+          if(UNDEF_CELL.has(cell.toLowerCase())) return;
+          trans.push({ from:nm, sym, to:cell, ln:row.ln });
+          pushState(cell);
+        });
+      }
+    }
+  }
+
+  /* ---- Q y Σ: declarados o deducidos ---- */
+  const S = (decl.S && decl.S.length) ? decl.S.slice() : symOrder.slice();
+  let Q = (decl.Q && decl.Q.length) ? decl.Q.slice() : stateOrder.slice();
+  if(!decl.Q || !decl.Q.length){
+    for(const q of [decl.q0, ...(decl.F || []), ...tableAccept]) if(q && !Q.includes(q)) Q.push(q);
+  }
+
+  const dup = arr => arr.filter((x, i) => arr.indexOf(x) !== i);
+  if(dup(Q).length) errors.push(`Q tiene estados repetidos: ${[...new Set(dup(Q))].join(", ")}.`);
+  if(dup(S).length) errors.push(`Σ tiene símbolos repetidos: ${[...new Set(dup(S))].join(", ")}.`);
+  Q = [...new Set(Q)];
+
+  if(!Q.length) errors.push("No hay estados: declara «Q = {…}» o escribe al menos una transición.");
+  if(!S.length) errors.push("Σ está vacío: declara «Σ = {…}» o escribe al menos una transición.");
+  if(S.includes("ε") || S.includes("epsilon"))
+    errors.push("Un DFA no admite ε en Σ: elimínalo del alfabeto.");
+
+  /* ---- q0 ---- */
+  let q0 = decl.q0;
+  if(!q0 && Q.length){ q0 = Q[0]; warns.push(`No declaraste el estado inicial: se usa «${q0}» (el primero de Q).`); }
+  if(q0 && !Q.includes(q0)) errors.push(`El estado inicial «${q0}» no está en Q.`);
+
+  /* ---- F ---- */
+  const F = (decl.F && decl.F.length) ? decl.F.slice()
+          : (decl.F ? [] : tableAccept.slice());
+  const badF = F.filter(f => !Q.includes(f));
+  if(badF.length) errors.push(`F contiene estados que no están en Q: ${badF.join(", ")}.`);
+
+  /* ---- transiciones ---- */
+  const seen = new Map();
+  const delta = [];
+  for(const t of trans){
+    if(!Q.includes(t.from)) errors.push(`Línea ${t.ln}: el estado «${t.from}» no está en Q.`);
+    if(!Q.includes(t.to))   errors.push(`Línea ${t.ln}: el destino «${t.to}» no está en Q.`);
+    if(!S.includes(t.sym))  errors.push(`Línea ${t.ln}: el símbolo «${t.sym}» no está en Σ.`);
+    const k = t.from + SEP + t.sym;
+    if(seen.has(k)){
+      const prev = seen.get(k);
+      if(prev.to === t.to) warns.push(`Línea ${t.ln}: δ(${t.from}, ${t.sym}) está repetida; se ignora.`);
+      else errors.push(`No determinista: δ(${t.from}, ${t.sym}) vale «${prev.to}» (línea ${prev.ln}) y «${t.to}» (línea ${t.ln}).`);
+      continue;
+    }
+    seen.set(k, t);
+    delta.push([t.from, t.sym, t.to]);
+  }
+
+  const missing = Q.length * S.length - delta.length;
+  if(!errors.length && missing > 0)
+    warns.push(`δ es parcial: faltan ${missing} par(es) de Q × Σ. Complétala o usa un estado dummy.`);
+
+  return {
+    ok: errors.length === 0,
+    errors, warns,
+    spec: { Q, S, q0, F, delta, language: decl.L || "" }
+  };
+}
+
+/** Construye un modelo cargable colocando los estados en círculo. */
+function modelFromSpec(spec){
+  const n = spec.Q.length;
+  const rad = Math.max(265, Math.round(32 * n));
+  const states = spec.Q.map((name, i) => {
+    const ang = Math.PI + (2 * Math.PI * i) / n;              // el primero, a la izquierda
+    return {
+      id: "s" + (i + 1), name,
+      x: n === 1 ? 0 : Math.round(rad * Math.cos(ang)),
+      y: n === 1 ? 0 : Math.round(rad * Math.sin(ang)),
+      accepting: spec.F.includes(name)
+    };
+  });
+  const idOf = new Map(states.map(s => [s.name, s.id]));
+  const delta = {};
+  for(const [f, a, t] of spec.delta){
+    const fi = idOf.get(f), ti = idOf.get(t);
+    if(fi && ti) (delta[fi] = delta[fi] || {})[a] = ti;
+  }
+  return {
+    formatVersion:1, alphabet:spec.S.slice(), states,
+    initial: idOf.get(spec.q0) || (states[0] || {}).id || null,
+    delta, language: spec.language
+  };
+}
+
+/** Vuelca el autómata actual al formato de la quíntupla (ida y vuelta). */
+function tupleFromModel(){
+  const out = [];
+  out.push("Q = {" + model.states.map(s => s.name).join(", ") + "}");
+  out.push("Σ = {" + model.alphabet.join(", ") + "}");
+  out.push("q0 = " + (model.initial ? nameOf(model.initial) : ""));
+  out.push("F = {" + model.states.filter(s => s.accepting).map(s => s.name).join(", ") + "}");
+  if(model.language.trim())
+    out.push("L = " + model.language.trim().replace(/\s+/g, " ").replace(/^L\s*=\s*/i, ""));
+  out.push("");
+  for(const s of model.states)
+    for(const a of model.alphabet){
+      const t = model.delta[key(s.id, a)];
+      if(t) out.push(`δ(${s.name}, ${a}) = ${nameOf(t)}`);
+    }
+  return out.join("\n");
+}
+
+/* ---- diálogo ---- */
+
+function openTupleModal(){
+  const box = $("#tupleErr");
+  box.textContent = ""; box.className = "";
+  $("#tupleModal").classList.add("on");
+  const ta = $("#tupleText");
+  setTimeout(() => { ta.focus(); }, 0);
+}
+function closeTupleModal(){ $("#tupleModal").classList.remove("on"); }
+
+$("#btnTuple").onclick = openTupleModal;
+$("#tupleCancel").onclick = closeTupleModal;
+$("#tupleExample").onclick = () => { $("#tupleText").value = TUPLE_EXAMPLE; $("#tupleErr").textContent = ""; };
+$("#tupleVision").onclick = () => {
+  copyText(buildVisionPrompt(), "Prompt de transcripción");
+  const box = $("#tupleErr");
+  box.className = "ok";
+  box.textContent = "Prompt copiado. Pégalo en un LLM con visión junto a la foto del diagrama, "
+                  + "y luego pega aquí su respuesta y pulsa «Generar DFA».";
+};
+$("#tupleFromCurrent").onclick = () => {
+  if(!model.states.length){ toast("No hay ningún autómata que volcar", "warn"); return; }
+  $("#tupleText").value = tupleFromModel();
+  $("#tupleErr").textContent = "";
+};
+$("#tupleModal").addEventListener("mousedown", ev => { if(ev.target.id === "tupleModal") closeTupleModal(); });
+$("#tupleText").addEventListener("keydown", ev => {
+  if(ev.key === "Escape"){ ev.stopPropagation(); closeTupleModal(); }
+  if(ev.key === "Enter" && (ev.ctrlKey || ev.metaKey)){ ev.preventDefault(); $("#tupleGo").onclick(); }
+});
+
+$("#tupleGo").onclick = async () => {
+  const res = parseQuintuple($("#tupleText").value);
+  const box = $("#tupleErr");
+  if(!res.ok){
+    box.className = "";
+    box.textContent = "No se pudo generar el autómata:\n" +
+                      res.errors.slice(0, 12).map(e => "• " + e).join("\n") +
+                      (res.errors.length > 12 ? `\n… y ${res.errors.length - 12} error(es) más.` : "");
+    return;
+  }
+  if(model.states.length &&
+     !await confirmBox("Se reemplazará el autómata actual por el generado desde la quíntupla. ¿Continuar?")) return;
+
+  loadModel(modelFromSpec(res.spec));
+  closeTupleModal();
+  fitView();
+  toast(`DFA generado: |Q| = ${res.spec.Q.length}, |Σ| = ${res.spec.S.length}`, "ok");
+  for(const w of res.warns.slice(0, 3)) toast(w, "warn");
+};
+
+/* --- exportación de imagen ---------------------------------------------- */
+
+function contentBBox(pad){
+  if(!model.states.length) return { x:0, y:0, w:400, h:300 };
+  const xs = [], ys = [];
+  for(const s of model.states){
+    xs.push(s.x - R - 70, s.x + R + 24);          // margen extra a la izquierda por la flecha inicial
+    ys.push(s.y - R - LOOP_H - 52, s.y + R + 24); // margen arriba por los bucles
+  }
+  const x = Math.min(...xs) - pad, y = Math.min(...ys) - pad;
+  return { x, y, w: Math.max(...xs) - x + pad, h: Math.max(...ys) - y + pad };
+}
+
+function serializeSvg(){
+  const bb = contentBBox(16);
+  const clone = svg.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  clone.setAttribute("viewBox", `${bb.x} ${bb.y} ${bb.w} ${bb.h}`);
+  clone.setAttribute("width", Math.round(bb.w));
+  clone.setAttribute("height", Math.round(bb.h));
+  const bg = clone.querySelector("#bgRect");     // fuera el patrón de puntos
+  if(bg) bg.setAttribute("fill", "#ffffff");
+  const ov = clone.querySelector("#gOverlay");
+  if(ov) ov.textContent = "";
+  clone.querySelectorAll(".edge-hit").forEach(n => n.remove());
+  clone.querySelectorAll(".node.sel,.node.hl,.node.cur,.edge.hl,.edge.active")
+       .forEach(n => n.setAttribute("class", n.getAttribute("class").replace(/\b(sel|hl|cur|active)\b/g, "").trim()));
+  return { xml: new XMLSerializer().serializeToString(clone), bb };
+}
+
+$("#btnSvg").onclick = () => {
+  if(!model.states.length){ toast("No hay nada que exportar", "warn"); return; }
+  download("dfa.svg", serializeSvg().xml, "image/svg+xml;charset=utf-8");
+  toast("dfa.svg descargado", "ok");
+};
+
+$("#btnPng").onclick = () => {
+  if(!model.states.length){ toast("No hay nada que exportar", "warn"); return; }
+  const { xml, bb } = serializeSvg();
+  const scale = 2;
+  const img = new Image();
+  img.onload = () => {
+    const cv = document.createElement("canvas");
+    cv.width = Math.round(bb.w * scale); cv.height = Math.round(bb.h * scale);
+    const ctx = cv.getContext("2d");
+    ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.drawImage(img, 0, 0, cv.width, cv.height);
+    cv.toBlob(b => { download("dfa.png", b); toast("dfa.png descargado (2×)", "ok"); }, "image/png");
+  };
+  img.onerror = () => toast("El navegador no pudo rasterizar el SVG; usa la exportación SVG", "err");
+  img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(xml);
+};
+
+/* --- encajar vista ------------------------------------------------------- */
+
+function fitView(){
+  const r = svg.getBoundingClientRect();
+  if(!r.width) return;
+  if(!model.states.length){
+    view = { x:-r.width/2, y:-r.height/2, w:r.width, h:r.height };
+    applyView(); return;
+  }
+  const bb = contentBBox(50);
+  const ar = r.width / r.height;
+  let w = bb.w, h = bb.h;
+  if(w / h < ar) w = h * ar; else h = w / ar;
+  view = { x: bb.x + bb.w/2 - w/2, y: bb.y + bb.h/2 - h/2, w, h };
+  applyView();
+}
+$("#btnFit").onclick = fitView;
+
+/* ==========================================================================
+   14. PESTAÑAS, REDIMENSIONADO Y ARRANQUE
+   ========================================================================== */
+
+$$(".tab").forEach(t => t.onclick = () => {
+  $$(".tab").forEach(o => o.classList.toggle("on", o === t));
+  $$(".pane").forEach(p => p.classList.toggle("on", p.id === t.dataset.pane));
+});
+
+(function grip(){
+  let dragging = false, startY = 0, startH = 0;
+  $("#grip").addEventListener("mousedown", e => {
+    dragging = true; startY = e.clientY; startH = $("#panel").getBoundingClientRect().height;
+    document.body.style.userSelect = "none"; e.preventDefault();
+  });
+  window.addEventListener("mousemove", e => {
+    if(!dragging) return;
+    const h = Math.min(innerHeight - 200, Math.max(90, startH - (e.clientY - startY)));
+    $("#panel").style.height = h + "px";
+    resetViewToSize();
+  });
+  window.addEventListener("mouseup", () => {
+    if(!dragging) return;
+    dragging = false; document.body.style.userSelect = "";
+  });
+})();
+
+window.addEventListener("resize", resetViewToSize);
+
+const EXAMPLE = {
+  formatVersion:1,
+  alphabet:["a","b"],
+  states:[
+    { id:"s1", name:"q0", x:-140, y:0, accepting:true },
+    { id:"s2", name:"q1", x:160,  y:0, accepting:false }
+  ],
+  initial:"s1",
+  delta:{ s1:{ a:"s2", b:"s1" }, s2:{ a:"s1", b:"s2" } },
+  language:"L = { w ∈ {a,b}* : w contiene un número par de a }"
+};
+$("#btnExample").onclick = async () => {
+  if(model.states.length && !await confirmBox("Se reemplazará el autómata actual por el ejemplo. ¿Continuar?")) return;
+  loadModel(JSON.parse(JSON.stringify(EXAMPLE)));
+  $("#batchInput").value = "bb\na\naba\nabba";
+  fitView();
+  toast("Ejemplo cargado: paridad de «a»", "ok");
+};
+
+(function boot(){
+  setMode("select");
+  const r = svg.getBoundingClientRect();
+  view = { x:-r.width/2, y:-r.height/2, w:r.width || 1000, h:r.height || 640 };
+  let restored = false;
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){ loadModel(JSON.parse(raw)); restored = true; }
+  }catch(e){ /* ignorar */ }
+  if(!restored){ $("#langInput").value = model.language; commit(); }
+  applyView();
+  if(model.states.length) fitView();
+})();
+</script>
+</body>
+</html>
