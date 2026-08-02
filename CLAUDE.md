@@ -78,6 +78,14 @@ quíntupla, prompt de transcripción y generación con ida y vuelta.
 Si añades una funcionalidad, añade también su sección de pruebas. El arnés ya ha
 cazado dos defectos reales que la lectura del código no vio.
 
+## Repositorio
+
+El proyecto vive en **https://github.com/arturo200907/dfa-lab** (público, rama
+`main`). El directorio de trabajo es un repositorio git desde el 2026-08-02.
+
+Pasa `node _verify.js` **antes** de cada commit: al ser público, el HTML que se
+sube es el que alguien puede abrir directamente.
+
 ## Arquitectura
 
 El `<script>` está dividido en secciones numeradas con banner de comentario
@@ -227,6 +235,25 @@ Reglas de acompañamiento aprendidas al hacerlo:
   ya ocupado (12.5px).
 
 ## Registro de cambios
+
+### 2026-08-02
+
+**El proyecto pasa a git y a GitHub.** El directorio, que hasta ahora eran tres
+archivos sueltos sin control de versiones, se inicializó como repositorio (rama
+`main`) y se publicó como **público** en `arturo200907/dfa-lab`, con los tres
+archivos tal cual estaban y un único commit inicial. Se ejecutó `node _verify.js`
+antes de commitear: 165/165.
+
+Decisiones que conviene recordar:
+- **Sin `.gitignore`**: no hay build, ni `node_modules`, ni artefactos. Añadir
+  uno vacío de contenido sólo sería ruido. Si algún día aparece algo generado,
+  ese es el momento de crearlo.
+- **`CLAUDE.md` se sube.** Es la documentación real del proyecto y no contiene
+  nada privado; al ser público hace también de README de facto. No se creó un
+  `README.md` aparte para no tener dos versiones de la verdad conviviendo — lo
+  que este mismo documento prohíbe.
+- Git avisa de la conversión LF→CRLF al hacer `add`; es el comportamiento normal
+  de `core.autocrlf` en Windows y no altera lo que se sube.
 
 ### 2026-07-31
 
