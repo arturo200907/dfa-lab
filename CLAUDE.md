@@ -80,11 +80,20 @@ cazado dos defectos reales que la lectura del código no vio.
 
 ## Repositorio
 
-El proyecto vive en **https://github.com/arturo200907/dfa-lab** (público, rama
-`main`). El directorio de trabajo es un repositorio git desde el 2026-08-02.
+El directorio de trabajo es un repositorio git desde el 2026-08-02, rama `main`,
+y se publica en **dos** remotos con el mismo contenido:
 
-Pasa `node _verify.js` **antes** de cada commit: al ser público, el HTML que se
-sube es el que alguien puede abrir directamente.
+| Remoto | Repositorio | Visibilidad |
+|---|---|---|
+| `origin` | https://github.com/arturo200907/dfa-lab | público |
+| `dfa`    | https://github.com/arturo200907/DFA     | privado |
+
+`dfa/main` es el **upstream** de la rama local: un `git push` a secas va al repo
+privado. Para actualizar el público hay que decirlo: `git push origin main`.
+Empuja siempre a los dos o los dos historiales divergirán.
+
+Pasa `node _verify.js` **antes** de cada commit: `dfa-lab` es público, así que el
+HTML que se sube es el que alguien puede abrir directamente.
 
 ## Arquitectura
 
@@ -235,6 +244,26 @@ Reglas de acompañamiento aprendidas al hacerlo:
   ya ocupado (12.5px).
 
 ## Registro de cambios
+
+### 2026-08-03
+
+**Segundo remoto: `arturo200907/DFA` (privado).** El usuario pidió subir el
+proyecto a un repositorio llamado `DFA`; ya existía en su cuenta, vacío y
+privado. Se añadió como remoto `dfa` y se empujó `main` tal cual (los tres
+archivos, los dos commits). `node _verify.js` antes de empujar: 165/165.
+
+Decisiones y trampas:
+- **No se tocó `origin`.** `dfa-lab` (público) sigue existiendo con el mismo
+  contenido; borrarlo o renombrarlo no era lo que se pidió.
+- **El `-u` del push cambió el upstream a `dfa/main`**, así que a partir de
+  ahora `git push` sin argumentos va al repo **privado**. Está documentado
+  arriba, pero es justo el tipo de detalle que muerde: si el público se queda
+  atrás, es por esto.
+- Al repo `DFA` se le puso la misma descripción que a `dfa-lab`; su visibilidad
+  privada se dejó como el usuario la había creado.
+- Dos remotos con el mismo proyecto es, en el fondo, dos versiones de la verdad
+  esperando a divergir. Si uno de los dos sobra, mejor archivarlo que mantener
+  el doble push.
 
 ### 2026-08-02
 
