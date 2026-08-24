@@ -96,12 +96,12 @@ acabar reforzando la evaluación, no sólo el dibujo.
 - **Las pruebas**: `node _verify.js` (sin dependencias; sale con código 1 si algo falla).
 
 Ejecuta `node _verify.js` después de **cualquier** cambio en el `<script>`.
-Son 298 comprobaciones en 29 secciones: modelo, aristas derivadas, simulador,
+Son 318 comprobaciones en 31 secciones: modelo, aristas derivadas, simulador,
 LaTeX/TikZ, validación, persistencia, import defensivo, paleta, parser de la
 quíntupla, prompt de transcripción, generación con ida y vuelta, δ como
 conjunto, modo AFN, simulación con ramas y ε, sintaxis de la expresión regular,
-construcción de Kleene (lenguaje **y** forma), equivalencia con contraejemplo
-y determinización.
+construcción de Kleene (lenguaje **y** forma), equivalencia con contraejemplo,
+determinización y escala de la interfaz.
 
 Si añades una funcionalidad, añade también su sección de pruebas. El arnés ya ha
 cazado dos defectos reales que la lectura del código no vio.
@@ -227,6 +227,14 @@ formato plano heredado).
   se decide por el producto, no comparando estados.
 - El simulador trabaja **siempre con conjuntos** de estados, también en AFD
   (donde son unitarios). Un `sim.steps[i].from` es un array, no un id.
+- **Toda medida nueva del CSS de la cabecera va en `calc(Npx * var(--ui))`**, o
+  se quedará clavada mientras el resto de la interfaz crece. Excepciones a
+  respetar: bordes, sombras y el `<style>` de dentro del `<svg>`.
+- Al partir un atajo `font:` en `font-size` + `font-family` hay que emitir
+  **también** `line-height`, `font-weight:400` y `font-style:normal`: el atajo
+  reinicia esas tres a su valor inicial, y si no se replica, elementos como
+  `.pop h5` (un `h5`, negrita por defecto del navegador) cambian de aspecto sin
+  que nadie haya tocado su regla.
 
 ## Funcionalidades y dónde viven
 
@@ -245,6 +253,7 @@ formato plano heredado).
 | Regex → AFN por el algoritmo de Kleene | §13c `regexToNfa()` + `modelFromAuto()` |
 | Determinización por subconjuntos | §13c `determinizeModel()` |
 | Tamaño del panel inferior | §14 `applyUi()` · `setPanelHeight()` · `setFold()` |
+| Escala de toda la interfaz | CSS `var(--ui)` en cada medida · §14 `setUiScale()` |
 | Export LaTeX / TikZ / prompts | §10 |
 | Simulador y lotes | §11 |
 
@@ -383,8 +392,15 @@ Dos usos más de la misma maquinaria:
 
 ### Escala tipográfica
 
-Estado actual, tras tres rondas de ampliación pedidas por el usuario. Si vuelves
-a subirla, sube **todo el grupo** a la vez o la jerarquía se rompe.
+**Todas las medidas de esta tabla son «al 100 %».** Desde el 2026-08-23 cada
+tamaño de letra y cada métrica de control del CSS de la cabecera se escribe
+`calc(Npx * var(--ui))`, y el mando *Interfaz* de la barra de herramientas mueve
+`--ui` entre 0.6 y 1.8. Los números de abajo son la `N`: la jerarquía relativa
+sigue siendo lo que importa, y el usuario ajusta el conjunto a su pantalla.
+
+Si vuelves a tocarla, sube o baja **todo el grupo** a la vez o la jerarquía se
+rompe — y escribe los valores nuevos también con `calc(… * var(--ui))`, o ese
+elemento se quedará clavado mientras el resto crece.
 
 | Zona | Elemento | px |
 |---|---|---|
@@ -416,10 +432,36 @@ Reglas de acompañamiento aprendidas al hacerlo:
   los botones de la barra (14px) y la etiqueta de reasignación sobre un símbolo
   ya ocupado (12.5px).
 
+### Escala de la interfaz (`--ui`)
+
+El mando **Interfaz  A− 100% A+ ↺** de la barra de herramientas cambia una sola
+variable, `--ui`, y con ella crece o mengua **toda** la interfaz: tipografías,
+rellenos de los botones, altura de las pestañas, ancho de la barra lateral,
+tamaño de los diálogos… Es lo que permite usar la herramienta igual en un
+portátil de 13" que en un proyector.
+
+Qué **no** escala, y por qué:
+
+- **Los bordes de 1px y las sombras.** Un borde de 0.7px se ve sucio y uno de
+  1.8px, tosco; a 1px se lee igual de bien a cualquier escala.
+- **El diagrama.** El lienzo tiene su propio zoom (rueda del ratón y *Encajar*),
+  y el tamaño del texto de los nodos está acoplado a `R`, `CURVE` y `LOOP_H`
+  (ver arriba): escalarlo por CSS rompería la geometría. El `<style>` que va
+  dentro del `<svg>` es justamente el del diagrama y **no** lleva `var(--ui)`;
+  hay una prueba que lo comprueba.
+- **El alto del panel inferior**, que es una medida de pantalla y ya tiene su
+  propio mando.
+- El ancho de `#renameInput`, porque el JS lo centra restando la mitad (90px).
+
+La barra lateral crece con la escala pero está limitada con
+`min(calc(376px*var(--ui)), 42vw)`: al 180 % pasaría de 670px y ahogaría el
+lienzo en una pantalla pequeña.
+
 ### Tamaño del panel inferior
 
-La tabla δ a 26px y el lienzo se disputan la pantalla, así que el panel tiene
-tres mandos, y los tres se recuerdan entre sesiones en `localStorage`
+La tabla δ y el lienzo se disputan la pantalla, así que el panel tiene sus
+propios mandos —**de alto**, no de tamaño de letra: para eso está *Interfaz*
+en la barra de arriba— y todos se recuerdan entre sesiones en `localStorage`
 (clave `dfa-editor-ui`, aparte del autómata):
 
 - **arrastrar la barra gris** (`#grip`) para el alto — el mínimo bajó de 90 a
@@ -443,7 +485,7 @@ que es lo que se proyecta.
 usuario en la misma sesión: poder crear AFN, poder escribir una expresión
 regular equivalente y ver si se cumple, y poder construir el AFN de una
 expresión por el algoritmo de Kleene. De paso, mandos para el tamaño del panel.
-Las pruebas pasaron de **165 a 298**.
+Las pruebas pasaron de **165 a 318**.
 
 **δ pasa a ser multivaluada.** El cambio de fondo: `model.delta[key(q,a)]` ya no
 es un id, es un **array de ids que nunca está vacío**. Se valoró mantener el
@@ -524,18 +566,45 @@ achicar el panel**: estaba, pero un glifo suelto ahí no lo encuentra nadie. Se
 rehicieron como un grupo con recuadro y rótulo «Panel». Vale la pena recordarlo
 antes de volver a colgar un control de un icono a secas.
 
+**Escala de toda la interfaz (`--ui`).** Segundo malentendido con lo mismo, y
+más de fondo: los `− +` del panel movían su **alto**, y lo que el usuario quería
+era **la letra y los controles**, «para que se adapte a cualquier pc». Son dos
+necesidades distintas y ahora hay dos mandos, cada uno rotulado sin ambigüedad:
+*Interfaz* (barra de herramientas, `A− 100% A+ ↺`) y *Alto ↕* (barra de
+pestañas del panel).
+
+Cómo se hizo, y por qué así:
+
+- **Todo el CSS de la cabecera pasó a `calc(Npx * var(--ui))`** — 66 tipografías
+  y 215 métricas — con un script, no a mano. Se descartó la propiedad `zoom` y
+  el `transform:scale`: `zoom` habría sido tres líneas, pero afecta a
+  `getScreenCTM()` y a `getBoundingClientRect()`, de los que dependen el
+  arrastre del lienzo y la colocación de los popovers. Con `calc` el peor fallo
+  posible es **estético** (algo que no escala); con `zoom` habría sido
+  **funcional** (arrastres descuadrados), y esta sesión no tenía navegador para
+  comprobarlo. Cuando no puedes probar, elige la técnica cuyo modo de fallo sea
+  el barato.
+- La transformación se verificó comparando el **multiconjunto de valores en px**
+  antes y después, desenvolviendo los `calc`: ningún valor podía desaparecer ni
+  cambiar, y las únicas diferencias resultaron ser los px del control nuevo.
+- La regla de oro queda en *Trampas conocidas*: toda medida nueva del CSS va con
+  `var(--ui)`, salvo bordes, sombras y el `<style>` de dentro del `<svg>`.
+
 **Trampa que costó un rato**: en los scripts de parcheo, `String.replace(str,str)`
 interpreta `$$` en el reemplazo como un `$` literal, así que un `$$(".tab")` se
 convirtió en `$(".tab")` y sólo lo cazó la prueba de humo. Si vuelves a parchear
 el archivo con un script, usa la forma con función: `replace(a, () => b)`.
 
-**Verificación.** 298/298. Secciones nuevas: 21 (δ como conjunto), 21b
+**Verificación.** 318/318. Secciones nuevas: 21 (δ como conjunto), 21b
 (validación en AFN), 22 (simulación con ramas y ε), 23 (sintaxis de la regex),
 24, 24a y 24b (Kleene: lenguaje, forma y veredicto), 25 (regex → lienzo y
-determinización),
-26 (persistencia del AFN) y 27 (quíntupla en AFN). Además, una prueba de humo
-aparte recorrió las rutas de interfaz que el arnés no toca (popover con ε, tabla
-editable del AFN, prompts, panel) buscando excepciones.
+determinización), 26 (persistencia del AFN), 27 (quíntupla en AFN), 28 (escala
+de la interfaz) y 28b (que el CSS esté escalado entero y que el diagrama no lo
+esté). El DOM simulado del arnés ganó `documentElement` y un `style` con
+`setProperty`, para poder comprobar `--ui` de verdad en vez de darlo por hecho.
+Además, una prueba de humo aparte recorrió las rutas de interfaz que el arnés no
+toca (popover con ε, tabla editable del AFN, prompts, panel, escala) buscando
+excepciones.
 
 **Limitación, otra vez**: no se ha abierto en un navegador de verdad. Todo está
 comprobado a nivel de función y de DOM simulado, pero los gestos de ratón y el

@@ -13,8 +13,12 @@ const registry = new Map();
 
 function mkEl(tag){
   const kids = [];
+  const css = {};                                  // propiedades personalizadas (--ui)
   const el = {
-    tagName: String(tag).toUpperCase(), children: kids, dataset: {}, style: {},
+    tagName: String(tag).toUpperCase(), children: kids, dataset: {},
+    style: { setProperty:(k, v) => { css[k] = String(v); },
+             getPropertyValue: k => (k in css ? css[k] : ""),
+             removeProperty: k => { delete css[k]; } },
     value: "", checked: false, id: "", _text: "", _html: "",
     classes: new Set(), attrs: {},
     get className(){ return [...this.classes].join(" "); },
@@ -50,6 +54,7 @@ const qAll = () => [];
 for(const id of ids){ const e = mkEl("div"); e.id = id; registry.set(id, e); }
 
 const document = {
+  documentElement: mkEl("html"),
   body: mkEl("body"),
   createElement: mkEl, createElementNS: (ns, t) => mkEl(t),
   querySelector: q1, querySelectorAll: qAll, addEventListener: () => {},
@@ -646,6 +651,51 @@ eq("el volcado del AFN se vuelve a parsear sin errores",
    run(`parseQuintuple(tupleFromModel(), "nfa").errors`), []);
 eq("ida y vuelta: mismo número de transiciones",
    run(`parseQuintuple(tupleFromModel(), "nfa").spec.delta.length`), 2);
+
+console.log("\n=== 28. Escala de la interfaz ===");
+const uiVar = () => run("document.documentElement.style.getPropertyValue('--ui')");
+run("setUiScale(1)");
+eq("al 100 % la variable vale 1", uiVar(), "1");
+eq("y el rótulo lo dice", run("$('#uiPct').textContent"), "100%");
+run("$('#uiBigger').onclick()");
+eq("«A+» sube un paso", run("ui.scale"), 1.1);
+eq("la variable CSS lo refleja", uiVar(), "1.1");
+run("$('#uiSmaller').onclick(); $('#uiSmaller').onclick()");
+eq("«A−» baja", run("ui.scale"), 0.9);
+eq("el rótulo se redondea a entero", run("$('#uiPct').textContent"), "90%");
+run("setUiScale(99)");
+eq("se limita por arriba", run("ui.scale"), 1.8);
+run("setUiScale(0)");
+eq("y por abajo", run("ui.scale"), 0.6);
+run("$('#uiReset').onclick()");
+eq("«↺» vuelve al 100 %", run("ui.scale"), 1);
+check("la escala se guarda aparte del autómata",
+      JSON.parse(store.get("dfa-editor-ui")).scale === 1);
+run("setUiScale(1.3); saveUi()");
+check("…y sobrevive con su valor", JSON.parse(store.get("dfa-editor-ui")).scale === 1.3);
+run("setUiScale(1)");
+// El alto del panel es otra cosa: no debe moverse al cambiar la escala.
+run("setPanelHeight(300); setUiScale(1.4)");
+eq("cambiar la escala no toca el alto del panel", run("ui.panelH"), 300);
+run("setUiScale(1); setPanelHeight(PANEL_DEFAULT)");
+
+console.log("\n=== 28b. El CSS entero está escalado ===");
+const CSS = /<style>([\s\S]*?)<\/style>/.exec(HTML)[1];
+eq("no queda ningún font-size en px sin escalar",
+   (CSS.match(/font-size\s*:\s*\d+(\.\d+)?px/g) || []).length, 0);
+eq("no queda ningún atajo font: con px",
+   (CSS.match(/font\s*:\s*\d/g) || []).length, 0);
+check("hay muchas medidas escaladas", (CSS.match(/var\(--ui\)/g) || []).length > 200);
+eq("los bordes NO se escalan (1px se lee igual a cualquier escala)",
+   (CSS.match(/border(?!-radius)[a-z-]*\s*:[^;{}]*calc\(/g) || []).length, 0);
+eq("las sombras tampoco",
+   (CSS.match(/box-shadow[^;{}]*calc\(/g) || []).length, 0);
+check("el alto del panel queda en px de pantalla", /#panel\{[^}]*height:410px/.test(CSS));
+check("--ui está declarada en :root", /--ui\s*:\s*1/.test(CSS));
+// El <style> interno del SVG es el del diagrama: no debe llevar la escala.
+const SVGCSS = HTML.slice(HTML.indexOf("<svg id=\"board\""));
+check("el diagrama no se escala con la interfaz",
+      !SVGCSS.slice(0, SVGCSS.indexOf("</style>")).includes("var(--ui)"));
 
 console.log(`\n──────────────────────────────\n  ${pass} correctas, ${fail} fallidas\n──────────────────────────────`);
 process.exit(fail ? 1 : 0);
