@@ -107,11 +107,18 @@ cazado dos defectos reales que la lectura del código no vio.
 
 ## Repositorio
 
-> **Ojo (2026-08-23): esta copia no es un repositorio.** El directorio actual
-> (`DFA-main`) no tiene `.git` — tiene toda la pinta de ser el ZIP descargado de
-> la rama `main`. Aquí no funciona ningún `git`: para versionar estos cambios
-> hay que copiarlos al clon de verdad, o clonar el repo y traer los archivos.
-> Lo de abajo describe ese clon, no esta carpeta.
+> **Ojo (2026-08-23): la carpeta de trabajo no es un repositorio.** El directorio
+> `DFA-main` no tiene `.git` — es el ZIP descargado de la rama `main`. Aquí no
+> funciona ningún `git`. Para publicar los cambios de esa carpeta hay que
+> clonar el repo aparte, copiar los tres archivos encima y commitear allí; es
+> lo que se hizo en la sesión del 2026-08-23, con un clon **temporal** que ya no
+> existe. Mientras se siga trabajando desde el ZIP habrá que repetir el baile en
+> cada publicación: si molesta, lo que toca es clonar de verdad y trabajar en el
+> clon.
+>
+> Comprobación que conviene hacer antes de copiar nada encima: que los archivos
+> del ZIP coincidan con el `HEAD` del clon. Si el ZIP es de un commit viejo,
+> copiar encima **revierte en silencio** lo que hubiera después.
 
 El proyecto es un repositorio git desde el 2026-08-02, rama `main`,
 y se publica en **dos** remotos con el mismo contenido:
@@ -490,6 +497,12 @@ editable del AFN, prompts, panel) buscando excepciones.
 **Limitación, otra vez**: no se ha abierto en un navegador de verdad. Todo está
 comprobado a nivel de función y de DOM simulado, pero los gestos de ratón y el
 aspecto real de la pestaña *Regex* no se han visto.
+
+**Publicado en los dos remotos** (commit `935fcef`, sobre `1e7baf9`). La carpeta
+de trabajo era el ZIP descargado, sin `.git`, así que se clonó el repo aparte,
+se comprobó que el ZIP coincidía con `HEAD` (idéntico byte a byte en los dos
+archivos de código), se copiaron los tres archivos encima y se empujó a `dfa` y
+a `origin`. Ver el aviso del apartado *Repositorio*.
 
 ### 2026-08-03
 
