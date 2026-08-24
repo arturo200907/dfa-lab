@@ -484,12 +484,12 @@ eq("comillas para un símbolo que choca con un operador",
 eq("símbolos multicarácter por coincidencia más larga",
    RP("ab", ["a","ab"], true).ast, { t:"sym", v:"ab" });
 
-console.log("\n=== 24. Kleene/Thompson y equivalencia ===");
+console.log("\n=== 24. Construcción de Kleene: el lenguaje que reconoce ===");
 const reAcc = (r, w, alpha, plusUnion) => run(`(()=>{
   const A = ${JSON.stringify(alpha || ["a","b"])};
   const pr = reParse(${JSON.stringify(r)}, A, ${plusUnion === undefined ? true : plusUnion});
   if(!pr.ok) return "ERROR: " + pr.errors[0];
-  const D = determinize(thompson(pr.ast), A);
+  const D = determinize(kleeneNfa(pr.ast), A);
   let i = D.start;
   for(const c of ${JSON.stringify(w)}) i = D.trans[i].get(c);
   return D.accept.has(i);
@@ -508,6 +508,53 @@ eq("∅ no acepta ni ε",      reAcc("∅",""),           false);
 eq("ε acepta sólo la cadena vacía", [reAcc("ε",""), reAcc("ε","a")], [true,false]);
 eq("(ab)* acepta «abab»",   reAcc("(ab)*","abab"),   true);
 eq("(ab)* rechaza «aba»",   reAcc("(ab)*","aba"),    false);
+
+console.log("\n=== 24a. Forma de la construcción (no sólo el lenguaje) ===");
+// Cómo se construye importa tanto como qué reconoce: es el dibujo que se corrige
+// en clase. Estas comprobaciones fijan la forma de la unión y de la estrella.
+const K = (r, alpha, plusUnion) => run(`(()=>{
+  const A = kleeneNfa(reParse(${JSON.stringify(r)}, ${JSON.stringify(alpha || ["a","b"])}, ${plusUnion === undefined ? true : plusUnion}).ast);
+  const eps = q => [...((A.edges.get(q) || new Map()).get("ε") || [])];
+  const sym = q => [...(A.edges.get(q) || new Map()).keys()].filter(x => x !== "ε");
+  return {
+    q: A.states.length,
+    acc: A.accept.size,
+    startAccepts: A.accept.has(A.start),
+    epsFromStart: eps(A.start).length,
+    symFromStart: sym(A.start),
+    // ¿vuelve cada final al inicio del fragmento con una ε?
+    backToFragment: [...A.accept].filter(f => f !== A.start)
+                    .every(f => eps(f).length > 0)
+  };
+})()`);
+
+const kAlt = K("a|b");
+eq("unión: el inicial es nuevo y sale con 2 ε", kAlt.epsFromStart, 2);
+eq("unión: del inicial no sale ningún símbolo", kAlt.symFromStart, []);
+eq("unión: siguen aceptando los finales de los dos lados", kAlt.acc, 2);
+eq("unión: sin estado de cierre artificial (2+2 estados y el nuevo inicial)", kAlt.q, 5);
+check("unión: el inicial nuevo no acepta", kAlt.startAccepts === false);
+
+const kStar = K("a*");
+eq("estrella: el inicial es nuevo y sale con 1 ε", kStar.epsFromStart, 1);
+check("estrella: el inicial nuevo ES de aceptación", kStar.startAccepts === true);
+check("estrella: el antiguo final vuelve al inicio del fragmento con ε", kStar.backToFragment);
+eq("estrella: aceptan el nuevo y los antiguos finales", kStar.acc, 2);
+eq("estrella: 3 estados, sin final artificial", kStar.q, 3);
+
+const kPlus = K("a+", ["a","b"], false);
+check("clausura positiva: NO añade estado inicial nuevo", kPlus.startAccepts === false);
+eq("clausura positiva: 2 estados", kPlus.q, 2);
+eq("clausura positiva: sólo acepta el final de siempre", kPlus.acc, 1);
+
+const kOpt = K("a?");
+check("opcional: el inicial nuevo acepta", kOpt.startAccepts === true);
+eq("opcional: 3 estados", kOpt.q, 3);
+
+eq("ε es un único estado inicial y de aceptación", [K("ε").q, K("ε").acc, K("ε").startAccepts], [1, 1, true]);
+eq("∅ es un único estado que no acepta", [K("∅").q, K("∅").acc], [1, 0]);
+eq("concatenación: no añade estados, sólo cose con ε", K("ab").q, 4);
+eq("concatenación: aceptan sólo los finales del segundo", K("ab").acc, 1);
 
 console.log("\n=== 24b. Veredicto sobre el autómata del lienzo ===");
 run("loadModel(JSON.parse(JSON.stringify(EXAMPLE_NFA)))");
@@ -538,8 +585,10 @@ catch(e){ check("renderRegex() no lanza", false, e.message); }
 console.log("\n=== 25. Regex → AFN en el lienzo (Kleene) y determinización ===");
 run("model.states=[]; model.delta={}; model.initial=null; model.regex='(a|b)*ab'; model.regexPlus='union'; regexToNfa()");
 eq("el autómata construido está en modo AFN", run("model.kind"), "nfa");
-check("usa transiciones ε (es Thompson)", run("epsTransitions().length") > 0);
-check("un único estado de aceptación", run("model.states.filter(s=>s.accepting).length") === 1);
+check("usa transiciones ε (es la construcción de Kleene)", run("epsTransitions().length") > 0);
+eq("(a|b)*ab da 10 estados con esta construcción", run("model.states.length"), 10);
+eq("y un único estado de aceptación (acaba en concatenación)",
+   run("model.states.filter(s=>s.accepting).length"), 1);
 eq("por construcción, L(M) = L(r)", run("regexReport().state"), "ok");
 eq("y simula bien: «ab» acepta", sim("ab"), "accept");
 eq("«aba» rechaza", sim("aba"), "reject");

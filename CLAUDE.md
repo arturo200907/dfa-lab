@@ -1,4 +1,4 @@
-# DFA·lab — editor y evaluador de autómatas finitos deterministas
+# DFA·lab — editor y evaluador de autómatas finitos (AFD y AFN)
 
 > **Norma permanente: mantén este documento al día.**
 > Después de **cada** cambio en el proyecto, y antes de dar el trabajo por
@@ -96,11 +96,12 @@ acabar reforzando la evaluación, no sólo el dibujo.
 - **Las pruebas**: `node _verify.js` (sin dependencias; sale con código 1 si algo falla).
 
 Ejecuta `node _verify.js` después de **cualquier** cambio en el `<script>`.
-Son 278 comprobaciones en 28 secciones: modelo, aristas derivadas, simulador,
+Son 298 comprobaciones en 29 secciones: modelo, aristas derivadas, simulador,
 LaTeX/TikZ, validación, persistencia, import defensivo, paleta, parser de la
 quíntupla, prompt de transcripción, generación con ida y vuelta, δ como
 conjunto, modo AFN, simulación con ramas y ε, sintaxis de la expresión regular,
-construcción de Kleene, equivalencia con contraejemplo y determinización.
+construcción de Kleene (lenguaje **y** forma), equivalencia con contraejemplo
+y determinización.
 
 Si añades una funcionalidad, añade también su sección de pruebas. El arnés ya ha
 cazado dos defectos reales que la lectura del código no vio.
@@ -240,7 +241,7 @@ formato plano heredado).
 | Modo AFD / AFN | §1 `model.kind`, §4 `setKind()` · `syncKindUI()` |
 | δ con varios destinos | §1 `dsts`/`dst`, §4 `setDsts`/`addDelta`/`toggleDelta` |
 | Simulación de un AFN (ramas y ε) | §11 `closureOf()`, `stepSet()`, `runTokens()` |
-| Expresión regular y equivalencia | §13c `reParse()` · `thompson()` · `determinize()` · `dfaDiff()` · `regexReport()` |
+| Expresión regular y equivalencia | §13c `reParse()` · `kleeneNfa()` · `determinize()` · `dfaDiff()` · `regexReport()` |
 | Regex → AFN por el algoritmo de Kleene | §13c `regexToNfa()` + `modelFromAuto()` |
 | Determinización por subconjuntos | §13c `determinizeModel()` |
 | Tamaño del panel inferior | §14 `applyUi()` · `setPanelHeight()` · `setFold()` |
@@ -305,7 +306,7 @@ regular que hubiera escrita (la quíntupla no habla de ella).
 La pestaña *Regex* compara `L(M)` con `L(r)` y **decide**. La cadena de montaje:
 
 ```
-r ──reParse──▶ AST ──thompson──▶ AFN ──┐
+r ──reParse──▶ AST ──kleeneNfa──▶ AFN ─┐
                                        ├──determinize──▶ AFD ──┐
 M (el del lienzo) ─────────────────────┘                       ├─ dfaDiff
                                                                ┘  (anchura)
@@ -333,14 +334,34 @@ pero se avisa, porque casi siempre es una errata.
 
 Dos usos más de la misma maquinaria:
 
-- **Regex → AFN (Kleene)** — `regexToNfa()` dibuja en el lienzo el AFN de
-  Thompson de la expresión. Sale con muchas ε a propósito: la gracia es ver la
+- **Regex → AFN (Kleene)** — `regexToNfa()` dibuja en el lienzo el AFN que da
+  el algoritmo de Kleene. Sale con muchas ε a propósito: la gracia es ver la
   construcción. Los estados se colocan en **capas por distancia al inicial**
-  (`modelFromAuto()`), no en círculo, porque los fragmentos de Thompson son
-  cadenas largas; y se numeran en orden de lectura, para que el inicial sea
-  `q0`. Ojo con el sentido de esto en la evaluación: el autómata generado es
-  equivalente a `r` **por construcción**, así que comprobarlo contra `r` no
-  demuestra nada — sirve para *ver* el AFN, o como punto de partida.
+  (`modelFromAuto()`), no en círculo, porque los fragmentos son cadenas largas;
+  y se numeran en orden de lectura, para que el inicial sea `q0`. Ojo con el
+  sentido de esto en la evaluación: el autómata generado es equivalente a `r`
+  **por construcción**, así que comprobarlo contra `r` no demuestra nada —
+  sirve para *ver* el AFN, o como punto de partida.
+
+  **La forma importa tanto como el lenguaje**, porque el dibujo es lo que se
+  corrige en clase. Cada fragmento tiene un inicial y un **conjunto** de
+  finales — no un final único — y de ahí salen la unión y la estrella sin
+  estados de cierre artificiales:
+
+  | | construcción | aceptan |
+  |---|---|---|
+  | `a` | `s ─a→ f` | `{f}` |
+  | `ε` | un solo estado | ese estado |
+  | `∅` | un solo estado | nadie |
+  | `AB` | cada final de `A` ─ε→ inicio de `B` | los de `B` |
+  | `A\|B` | inicial **nuevo** ─ε→ inicio de `A` y ─ε→ inicio de `B` | los de `A` y los de `B` |
+  | `A*` | inicial **nuevo que acepta** ─ε→ inicio de `A`; cada final de `A` ─ε→ inicio de `A` | el nuevo y los de `A` |
+  | `A⁺` | como `A*` sin estado nuevo | los de `A` |
+  | `A?` | inicial **nuevo que acepta** ─ε→ inicio de `A` | el nuevo y los de `A` |
+
+  Las pruebas de la sección 24a fijan esa forma (cuántos estados, cuántas ε
+  salen del inicial, quién acepta), no sólo el lenguaje resultante: el lenguaje
+  no distingue una construcción de otra, y era justo lo que se había colado.
 - **Determinizar (subconjuntos)** — `determinizeModel()` sustituye el AFN del
   lienzo por el AFD equivalente, con los estados nombrados por sus miembros
   (`{q0,q2}`). Es también la salida que se ofrece al pasar de modo AFN a AFD
@@ -422,7 +443,7 @@ que es lo que se proyecta.
 usuario en la misma sesión: poder crear AFN, poder escribir una expresión
 regular equivalente y ver si se cumple, y poder construir el AFN de una
 expresión por el algoritmo de Kleene. De paso, mandos para el tamaño del panel.
-Las pruebas pasaron de **165 a 278**.
+Las pruebas pasaron de **165 a 298**.
 
 **δ pasa a ser multivaluada.** El cambio de fondo: `model.delta[key(q,a)]` ya no
 es un id, es un **array de ids que nunca está vacío**. Se valoró mantener el
@@ -443,7 +464,7 @@ refactor no se había llevado nada por delante.
 
 **Pestaña Regex: la primera comprobación semántica decidible.** Hasta ahora todo
 lo semántico terminaba en «pregúntale a un LLM». Comparar `L(M)` con una
-expresión regular sí es decidible, así que la pestaña no opina: Kleene/Thompson,
+expresión regular sí es decidible, así que la pestaña no opina: Kleene,
 subconjuntos y recorrido en anchura del producto. El primer par de estados con
 aceptación distinta da el contraejemplo **más corto**, con el mismo vocabulario
 de falso positivo / falso negativo que ya usaba el prompt. El apartado
@@ -461,13 +482,34 @@ Decisiones y trampas de esta parte:
   perdería detrás de un mensaje de sintaxis.
 - Hay tope (`DET_LIMIT`) para no colgar el navegador con un 2^|Q| desbocado.
 
-**Kleene → lienzo.** `regexToNfa()` dibuja el AFN de Thompson. Se colocan los
+**Kleene → lienzo.** `regexToNfa()` dibuja el AFN de la expresión. Se colocan los
 estados en capas por distancia al inicial en vez de en círculo (los fragmentos
-de Thompson son cadenas largas) y se numeran en orden de lectura: la primera
-versión los numeraba por orden de construcción y el inicial acababa llamándose
-`q6`, que no hay quien lo explique en clase. Aviso que conviene no perder: ese
-AFN es equivalente a `r` **por construcción**, así que comprobarlo contra `r` no
+son cadenas largas) y se numeran en orden de lectura: la primera versión los
+numeraba por orden de construcción y el inicial acababa llamándose `q6`, que no
+hay quien lo explique en clase. Aviso que conviene no perder: ese AFN es
+equivalente a `r` **por construcción**, así que comprobarlo contra `r` no
 demuestra nada del diseño del alumno.
+
+**Corrección, el mismo día: la construcción era la de Thompson, no la de
+clase.** El usuario lo señaló: en la unión debe crearse un inicial nuevo con ε a
+los dos fragmentos (y ya está: **sin** estado final común), y en la estrella un
+inicial nuevo **que acepta**, con ε al antiguo inicial y con los antiguos
+finales volviendo a ese antiguo inicial por ε.
+
+Lo que había era la construcción de Thompson canónica, que **no reconoce un
+lenguaje distinto** — el propio comparador de la pestaña lo verificaba, y las
+pruebas de lenguaje seguían pasando después de cambiarla — pero dibuja otra
+cosa: mete un estado de cierre en la unión y en la estrella. Y aquí el dibujo
+**es** el entregable. Lección que vale para el resto del proyecto: comprobar
+sólo el lenguaje deja pasar errores de forma, y en una herramienta que sirve
+para que a alguien le corrijan un diagrama, la forma es requisito.
+
+El cambio de fondo fue que un fragmento pasara a tener un **conjunto** de
+estados de aceptación en vez de uno solo (`{s, F:[…]}`); con final único no hay
+manera de hacer la unión sin el estado de cierre. `thompson()` pasó a llamarse
+`kleeneNfa()`. Se añadió la sección de pruebas **24a**, que comprueba la
+**forma** (número de estados, ε que salen del inicial, quién acepta) y no sólo
+el lenguaje. Pruebas: 278 → 298.
 
 **Tamaño del panel.** Arrastrar la barra (mínimo 56px), botones **− / +** por
 pasos, plegado (también con doble clic en la barra) y un modo **compacto** que
@@ -487,9 +529,10 @@ interpreta `$$` en el reemplazo como un `$` literal, así que un `$$(".tab")` se
 convirtió en `$(".tab")` y sólo lo cazó la prueba de humo. Si vuelves a parchear
 el archivo con un script, usa la forma con función: `replace(a, () => b)`.
 
-**Verificación.** 278/278. Secciones nuevas: 21 (δ como conjunto), 21b
+**Verificación.** 298/298. Secciones nuevas: 21 (δ como conjunto), 21b
 (validación en AFN), 22 (simulación con ramas y ε), 23 (sintaxis de la regex),
-24 y 24b (Kleene y veredicto), 25 (regex → lienzo y determinización),
+24, 24a y 24b (Kleene: lenguaje, forma y veredicto), 25 (regex → lienzo y
+determinización),
 26 (persistencia del AFN) y 27 (quíntupla en AFN). Además, una prueba de humo
 aparte recorrió las rutas de interfaz que el arnés no toca (popover con ε, tabla
 editable del AFN, prompts, panel) buscando excepciones.

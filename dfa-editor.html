@@ -546,7 +546,7 @@
             <button class="btn" id="btnReWord"
               title="Copia el contraejemplo al simulador para ver su traza">↳ Probar el contraejemplo</button>
             <button class="btn primary" id="btnReKleene"
-              title="Construye el AFN de la expresión con el algoritmo de Kleene (construcción de Thompson) y lo dibuja en el lienzo">⚙ Regex → AFN (Kleene)</button>
+              title="Construye el AFN de la expresión con el algoritmo de Kleene y lo dibuja en el lienzo">⚙ Regex → AFN (Kleene)</button>
           </div>
           <input class="str" id="reInput" spellcheck="false" autocomplete="off"
                  placeholder="(a|b)*ab">
@@ -2901,10 +2901,10 @@ $("#btnFit").onclick = fitView;
    decidible. Comparar L(M) con una descripción en palabras no lo es; comparar
    L(M) con una expresión regular, sí:
 
-       r  --Kleene/Thompson-->  AFN  --subconjuntos-->  AFD ⌉
-                                                          ├─ recorrido en
-       M  ------------------------------------------->  AFD ⌋  anchura del
-                                                              producto
+       r  ----Kleene---->  AFN  --subconjuntos-->  AFD ⌉
+                                                        ├─ recorrido en
+       M  --------------------------------------->  AFD ⌋  anchura del
+                                                           producto
 
    El primer par de estados con aceptación distinta da el CONTRAEJEMPLO MÁS
    CORTO, que es exactamente lo que la herramienta pide a un LLM en el prompt
@@ -2912,7 +2912,7 @@ $("#btnFit").onclick = fitView;
 
    Los autómatas de esta sección son «genéricos» (estados opacos, δ con ε) y
    NO son el modelo del lienzo: así los mismos algoritmos sirven para el
-   autómata dibujado, para el de Thompson y para el de subconjuntos.
+   autómata dibujado, para el de Kleene y para el de subconjuntos.
    ========================================================================== */
 
 const DET_LIMIT = 4000;        // tope de subconjuntos: 2^|Q| puede dispararse
@@ -3173,43 +3173,68 @@ function reParse(src, alphabet, plusIsUnion){
 }
 
 /**
- * Teorema de Kleene, construcción de Thompson: cada operador se traduce a un
- * fragmento con UN inicio y UN final, y los fragmentos se cosen con ε.
+ * Teorema de Kleene: de la expresión al AFN, por inducción sobre su estructura.
  *
- *   a        ─a→                     A|B     ε a los dos, ε desde los dos
- *   AB       final de A ─ε→ inicio de B
- *   A*       inicio ─ε→ final, final de A ─ε→ inicio de A
- *   A+       final de A ─ε→ inicio de A          (A A*, sin duplicar el fragmento)
- *   A?       inicio de A ─ε→ final de A
+ * Cada fragmento tiene UN estado inicial y un CONJUNTO de estados de
+ * aceptación. Que la aceptación sea un conjunto y no un estado único es lo que
+ * permite que la unión y la estrella salgan **tal como se construyen a mano en
+ * clase**, sin estados de cierre artificiales:
  *
- * El resultado tiene muchos estados y muchas ε: es a propósito, así se ve la
- * construcción. Para trabajar con él, determinízalo.
+ *   a       s ─a→ f                                        aceptan: {f}
+ *   ε       un solo estado, inicial y de aceptación         aceptan: {s}
+ *   ∅       un solo estado sin aceptación                   aceptan: {}
+ *   AB      cada final de A ─ε→ inicio de B                 aceptan: los de B
+ *   A|B     estado inicial NUEVO ─ε→ inicio de A
+ *                                ─ε→ inicio de B            aceptan: los de A y los de B
+ *   A*      estado inicial NUEVO, que además ACEPTA, ─ε→ inicio de A;
+ *           cada final de A ─ε→ inicio de A                 aceptan: el nuevo y los de A
+ *   A+      como A* pero sin estado nuevo: los finales
+ *           de A ─ε→ inicio de A                            aceptan: los de A
+ *   A?      estado inicial NUEVO que acepta ─ε→ inicio de A aceptan: el nuevo y los de A
+ *
+ * (La construcción de Thompson canónica, que estuvo aquí antes, añade además un
+ * estado final común en la unión y en la estrella. Da el mismo lenguaje — el
+ * comparador de esta misma sección lo verificaba — pero no es el dibujo que se
+ * pide en clase, y el dibujo es justamente lo que aquí se evalúa.)
+ *
+ * El resultado tiene muchas ε a propósito: así se ve la construcción. Para
+ * trabajar con él, determinízalo.
  */
-function thompson(ast){
+function kleeneNfa(ast){
   const A = autoNew();
   let n = 0;
   const st = () => { const q = "t" + (n++); A.states.push(q); return q; };
+  /** Añade f ─ε→ destino para cada final del fragmento, sin bucles ε inútiles. */
+  const backTo = (finals, target) => {
+    for(const f of finals) if(f !== target) autoAdd(A, f, EPS, target);
+  };
   const build = node => {
     switch(node.t){
-      case "sym":   { const s = st(), f = st(); autoAdd(A, s, node.v, f); return { s, f }; }
-      case "eps":   { const s = st(), f = st(); autoAdd(A, s, EPS, f);    return { s, f }; }
-      case "empty": { const s = st(), f = st();                          return { s, f }; }
+      case "sym":   { const s = st(), f = st(); autoAdd(A, s, node.v, f); return { s, F:[f] }; }
+      case "eps":   { const s = st();                                     return { s, F:[s] }; }
+      case "empty": { const s = st();                                     return { s, F:[] }; }
       case "cat":   { const x = build(node.a), y = build(node.b);
-                      autoAdd(A, x.f, EPS, y.s); return { s:x.s, f:y.f }; }
-      case "alt":   { const x = build(node.a), y = build(node.b), s = st(), f = st();
+                      backTo(x.F, y.s);
+                      return { s:x.s, F:y.F }; }
+      case "alt":   { const x = build(node.a), y = build(node.b), s = st();
                       autoAdd(A, s, EPS, x.s); autoAdd(A, s, EPS, y.s);
-                      autoAdd(A, x.f, EPS, f); autoAdd(A, y.f, EPS, f); return { s, f }; }
-      case "star":  { const x = build(node.a), s = st(), f = st();
-                      autoAdd(A, s, EPS, x.s); autoAdd(A, s, EPS, f);
-                      autoAdd(A, x.f, EPS, x.s); autoAdd(A, x.f, EPS, f); return { s, f }; }
-      case "plus":  { const x = build(node.a); autoAdd(A, x.f, EPS, x.s); return { s:x.s, f:x.f }; }
-      case "opt":   { const x = build(node.a); autoAdd(A, x.s, EPS, x.f); return { s:x.s, f:x.f }; }
+                      return { s, F:[...x.F, ...y.F] }; }
+      case "star":  { const x = build(node.a), s = st();
+                      autoAdd(A, s, EPS, x.s);
+                      backTo(x.F, x.s);
+                      return { s, F:[s, ...x.F] }; }
+      case "plus":  { const x = build(node.a);
+                      backTo(x.F, x.s);
+                      return { s:x.s, F:x.F }; }
+      case "opt":   { const x = build(node.a), s = st();
+                      autoAdd(A, s, EPS, x.s);
+                      return { s, F:[s, ...x.F] }; }
     }
     throw new Error("nodo de expresión desconocido: " + node.t);
   };
   const r = build(ast);
   A.start = r.s;
-  A.accept = new Set([r.f]);
+  A.accept = new Set(r.F);
   return A;
 }
 
@@ -3237,7 +3262,7 @@ function regexReport(){
 
   const alphabet = compareAlphabet(pr.extra);
   const M  = determinize(autoFromModel(), alphabet);
-  const Rg = determinize(thompson(pr.ast), alphabet);
+  const Rg = determinize(kleeneNfa(pr.ast), alphabet);
   if(M.overflow || Rg.overflow)
     return { state:"error", errors:["Demasiados subconjuntos: el autómata es muy grande para compararlo aquí."] };
 
@@ -3330,7 +3355,7 @@ $("#btnReWord").onclick = () => {
 
 /**
  * Convierte un autómata genérico en modelo dibujable, colocando los estados en
- * capas por distancia al inicial (los de Thompson son cadenas largas: en
+ * capas por distancia al inicial (los de Kleene son cadenas largas: en
  * círculo quedarían ilegibles).
  */
 function modelFromAuto(A, alphabet, nameOfState){
@@ -3388,7 +3413,7 @@ function modelFromAuto(A, alphabet, nameOfState){
            language: model.language, regex: model.regex, regexPlus: model.regexPlus };
 }
 
-/** Dibuja en el lienzo el AFN de Thompson de la expresión escrita. */
+/** Dibuja en el lienzo el AFN que el algoritmo de Kleene da para la expresión. */
 async function regexToNfa(){
   const src = String(model.regex || "").trim().replace(/^r\s*=\s*/i, "");
   if(!src){ toast("Escribe primero una expresión regular", "warn"); return; }
@@ -3397,7 +3422,7 @@ async function regexToNfa(){
   if(model.states.length && !await confirmBox(
       "Se reemplazará el autómata del lienzo por el AFN que el algoritmo de Kleene\n" +
       "construye para la expresión. ¿Continuar?")) return;
-  const A = thompson(pr.ast);
+  const A = kleeneNfa(pr.ast);
   loadModel(modelFromAuto(A, compareAlphabet(pr.extra)));
   fitView();
   toast(`AFN de Kleene construido: |Q| = ${model.states.length}, y por construcción L(M) = L(r)`, "ok");
