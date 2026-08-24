@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Editor de DFA — función de transición y export LaTeX</title>
+<title>Editor de AFD/AFN — transición, expresión regular y export LaTeX</title>
 <style>
   :root{
     --bg:#12151c; --bg2:#1a1f2b; --bg3:#232a38; --line:#333c4d;
@@ -45,6 +45,11 @@
   .tbtn.on{background:var(--accent2);border-color:var(--accent)}
   .tbtn kbd{font:14px var(--mono);opacity:.6;background:rgba(0,0,0,.3);border-radius:3px;padding:0 5px}
   .sep{width:1px;height:22px;background:var(--line);margin:0 4px}
+  .kindSw{display:inline-flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+  .kbtn{padding:8px 15px;background:var(--bg3);font-weight:600;letter-spacing:.03em}
+  .kbtn:hover{background:#2c3446}
+  .kbtn.on{background:var(--accent2);color:#fff}
+  .kbtn.on.nfa{background:#7a4fd0}
   .spacer{flex:1}
 
   /* ---------- sidebar ---------- */
@@ -120,7 +125,7 @@
   #grip{height:6px;background:var(--bg2);border-top:1px solid var(--line);cursor:ns-resize}
   #grip:hover{background:var(--accent2)}
   #panel{background:var(--bg2);border-top:1px solid var(--line);display:grid;grid-template-rows:auto 1fr;height:410px;min-height:0}
-  #tabs{display:flex;gap:2px;padding:6px 10px 0;border-bottom:1px solid var(--line);align-items:center}
+  #tabs{display:flex;flex-wrap:wrap;gap:2px;padding:6px 10px 0;border-bottom:1px solid var(--line);align-items:center}
   .tab{padding:10px 20px;border-radius:7px 7px 0 0;color:var(--fg2);border:1px solid transparent;border-bottom:none;font-size:21px}
   .tab:hover{color:var(--fg)}
   .tab.on{background:var(--bg);color:var(--fg);border-color:var(--line)}
@@ -140,6 +145,8 @@
   table.tt td.undef{color:var(--err);background:rgba(244,82,107,.09)}
   table.tt td.hl,table.tt th.rowh.hl{background:rgba(91,157,255,.2)}
   table.tt td select{padding:4px 7px;font:22px var(--mono);width:100%}
+  table.tt td input{padding:4px 7px;font:22px var(--mono);width:100%;min-width:120px;text-align:center}
+  table.tt td.nd{color:#c9a2ff}
   .mark{color:var(--accent);font-weight:700}
 
   /* ---------- code blocks ---------- */
@@ -173,12 +180,59 @@
   table.batch td.r{color:#ff9fae}
   table.batch td.e{color:#f0cd7a}
 
+  /* ---------- expresión regular ---------- */
+  #reInput{font:28px var(--mono);width:100%;max-width:820px}
+  .reOpt{display:flex;gap:6px;align-items:center;color:var(--fg2);font-size:18px}
+  .reOpt select{font-size:18px;padding:4px 7px}
+  #reVerdict{margin:12px 0 10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  #reDetail{font-size:20px;line-height:1.6}
+  #reDetail code,#reVerdict code{font:21px var(--mono);background:var(--bg3);padding:2px 9px;border-radius:5px}
+  #reDetail .w{font:24px var(--mono);color:#ffd479}
+  #reDetail .blk{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:11px 14px;margin-top:9px}
+  #reDetail .lst{font:20px var(--mono);color:var(--fg2)}
+  #reDetail ul{margin:6px 0 0;padding-left:26px}
+  .tab .badge.na{background:var(--bg3);color:var(--fg2)}
+  /* mandos del alto del panel: agrupados y rotulados, porque un glifo suelto
+     en la barra de pestañas no lo encuentra nadie */
+  .panelCtl{
+    display:inline-flex;align-items:center;gap:2px;margin:0 0 6px 6px;padding:2px;
+    border:1px solid var(--line);border-radius:7px;background:var(--bg)
+  }
+  .panelCtl .lbl{font-size:15px;color:var(--fg2);padding:0 8px;letter-spacing:.05em;text-transform:uppercase}
+  .panelCtl button{min-width:36px;padding:5px 9px;border-radius:5px;color:var(--fg2);font-size:19px;line-height:1.15}
+  .panelCtl button:hover{background:var(--bg3);color:var(--fg)}
+  .panelCtl button.on{background:var(--accent2);color:#fff}
+
+  /* panel plegado: sólo queda la barra de pestañas */
+  #panel.folded{height:auto !important}
+  #panel.folded .pane{display:none}
+  #panel.folded #tabs{border-bottom:none}
+
+  /* modo compacto: la misma información en bastante menos alto */
+  #panel.compact .pane{padding:9px 12px}
+  #panel.compact .paneHead{margin-bottom:8px;gap:8px}
+  #panel.compact .paneHead h4{font-size:19px}
+  #panel.compact table.tt{font-size:19px}
+  #panel.compact table.tt th,#panel.compact table.tt td{padding:6px 13px;min-width:62px}
+  #panel.compact table.tt td select,#panel.compact table.tt td input{font-size:17px}
+  #panel.compact pre.code{font-size:16px;line-height:1.5;padding:10px}
+  #panel.compact .tapeBox{font-size:22px;padding:8px 12px}
+  #panel.compact .trace{font-size:18px;padding:8px 11px}
+  #panel.compact .simRow input.str,#panel.compact #reInput{font-size:21px}
+  #panel.compact .issue{font-size:17px;padding:7px 11px}
+  #panel.compact .issue code{font-size:16px}
+  #panel.compact #reDetail{font-size:17px}
+  #panel.compact #reDetail code,#panel.compact #reVerdict code{font-size:17px}
+  #panel.compact .verdict{font-size:18px;padding:6px 13px}
+  #panel.compact table.batch{font-size:17px}
+
   /* ---------- validation ---------- */
   .issue{display:flex;gap:10px;align-items:flex-start;padding:10px 13px;border-radius:8px;border:1px solid var(--line);background:var(--bg);margin-bottom:9px;font-size:21px}
   .issue .ic{font-weight:700;flex:none;width:22px;font-size:22px;text-align:center}
   .issue.err{border-color:rgba(244,82,107,.5)} .issue.err .ic{color:var(--err)}
   .issue.warn{border-color:rgba(210,153,34,.5)} .issue.warn .ic{color:var(--warn)}
   .issue.ok{border-color:rgba(63,185,80,.5)} .issue.ok .ic{color:var(--ok)}
+  .issue.info{border-color:rgba(91,157,255,.45)} .issue.info .ic{color:var(--accent)}
   .issue .bd{flex:1;min-width:0}
   .issue code{font:19px var(--mono);background:var(--bg3);padding:2px 8px;border-radius:4px}
 
@@ -253,6 +307,10 @@
 
   <div id="toolbar">
     <div class="brand">DFA<span>·</span>lab</div>
+    <div class="kindSw" title="AFD: δ(q,a) tiene un único destino y no hay ε.&#10;AFN: δ(q,a) puede tener varios destinos, ninguno, o ser una transición ε.">
+      <button class="kbtn on" id="kindDfa">AFD</button>
+      <button class="kbtn" id="kindNfa">AFN</button>
+    </div>
     <button class="tbtn" data-mode="select" title="Mover estados y hacer panorámica">✥ Mover <kbd>V</kbd></button>
     <button class="tbtn" data-mode="add"    title="Clic en el lienzo para crear un estado">＋ Estado <kbd>S</kbd></button>
     <button class="tbtn" data-mode="connect"
@@ -304,7 +362,7 @@
             <span class="tx"><b>Estado de aceptación</b><small>entra en F</small></span>
           </div>
 
-          <div class="pitem" draggable="true" data-kind="trap"
+          <div class="pitem" draggable="true" data-kind="trap" id="pitemTrap"
                title="Arrastra al lienzo para crear un estado dummy (trampa): absorbe todo Σ y nunca acepta">
             <span class="glyph">
               <svg width="46" height="46" viewBox="0 0 40 40">
@@ -335,7 +393,7 @@
           <input id="alphaInput" placeholder="a, b, 0, 1…" autocomplete="off">
           <button class="btn primary" id="alphaAdd">Añadir</button>
         </div>
-        <div class="hint">Separa varios con coma o espacio. Se admiten símbolos de más de un carácter. Un DFA no admite ε.</div>
+        <div class="hint" id="alphaHint">Separa varios con coma o espacio. Se admiten símbolos de más de un carácter. Un AFD no admite ε.</div>
       </div>
 
       <div class="sec">
@@ -414,12 +472,21 @@
           <button class="tab on" data-pane="pTable">Tabla δ</button>
           <button class="tab" data-pane="pTex">LaTeX</button>
           <button class="tab" data-pane="pSim">Simulador</button>
+          <button class="tab" data-pane="pRe" title="Escribe una expresión regular y comprueba si describe exactamente L(M)">Regex <span class="badge na" id="reBadge">·</span></button>
           <button class="tab" data-pane="pVal">Validación <span class="badge ok" id="valBadge">0</span></button>
+          <div class="spacer" style="flex:1"></div>
+          <div class="panelCtl">
+            <span class="lbl">Panel</span>
+            <button id="panelSmaller" title="Achicar el panel (también: arrastra la barra gris de arriba)">−</button>
+            <button id="panelBigger" title="Agrandar el panel">+</button>
+            <button id="panelCompact" title="Tipografía compacta: cabe casi el doble de contenido en el mismo alto">Aa</button>
+            <button id="panelFold" title="Plegar el panel del todo (o doble clic en la barra gris)">▾</button>
+          </div>
         </div>
 
         <div class="pane on" id="pTable">
           <div class="paneHead">
-            <h4>δ : Q × Σ → Q</h4>
+            <h4 id="tblHead">δ : Q × Σ → Q</h4>
             <label style="display:flex;gap:5px;align-items:center;color:var(--fg2)">
               <input type="checkbox" id="tblEdit" style="accent-color:var(--accent)"> Editar desde la tabla
             </label>
@@ -466,10 +533,47 @@
           <div id="batchOut"></div>
         </div>
 
+        <div class="pane" id="pRe">
+          <div class="paneHead">
+            <h4>Expresión regular equivalente</h4>
+            <label class="reOpt">«+» significa
+              <select id="rePlus">
+                <option value="union">unión · a+b = a|b</option>
+                <option value="closure">clausura positiva · a+ = aa*</option>
+              </select>
+            </label>
+            <div class="spacer" style="flex:1"></div>
+            <button class="btn" id="btnReWord"
+              title="Copia el contraejemplo al simulador para ver su traza">↳ Probar el contraejemplo</button>
+            <button class="btn primary" id="btnReKleene"
+              title="Construye el AFN de la expresión con el algoritmo de Kleene (construcción de Thompson) y lo dibuja en el lienzo">⚙ Regex → AFN (Kleene)</button>
+          </div>
+          <input class="str" id="reInput" spellcheck="false" autocomplete="off"
+                 placeholder="(a|b)*ab">
+          <div id="reVerdict"></div>
+          <div id="reDetail"></div>
+          <details class="syntax" id="reHelp">
+            <summary>Sintaxis aceptada</summary>
+<pre>Símbolos       los de Σ (coincidencia más larga, así que valen los multicarácter)
+               'x'  entrecomillado, para un símbolo que choca con un operador
+Concatenación  ab      (yuxtaposición)   ·   también se admite  a·b
+Unión          a|b     a∪b               ·   y  a+b  si arriba eliges «unión»
+Estrella       a*      (cero o más)
+Positiva       a⁺      (una o más)       ·   y  a+  si arriba eliges «clausura positiva»
+Opcional       a?      (cero o una)
+Vacíos         ε  λ  (cadena vacía)      ·   ∅  (lenguaje vacío)
+Agrupación     (a|b)*ab
+
+Precedencia: * ⁺ ? > concatenación > unión.   Ejemplo: ab|c* = (ab)|(c*)</pre>
+          </details>
+        </div>
+
         <div class="pane" id="pVal">
           <div class="paneHead">
             <h4>Comprobaciones</h4>
             <button class="btn" id="btnTrap">Completar δ con estado trampa</button>
+            <button class="btn" id="btnDet"
+              title="Construcción de subconjuntos: genera el AFD equivalente y lo dibuja en el lienzo">⇉ Determinizar (subconjuntos)</button>
           </div>
           <div id="valOut"></div>
         </div>
@@ -479,7 +583,7 @@
 </div>
 
 <div id="tupleModal"><div id="tupleBox">
-  <h4>Generar DFA desde su quíntupla <small>M = (Q, Σ, δ, q₀, F)</small></h4>
+  <h4 id="tupleTitle">Generar AFD desde su quíntupla <small>M = (Q, Σ, δ, q₀, F)</small></h4>
   <textarea id="tupleText" spellcheck="false" autocomplete="off"
     placeholder="Q = {q0, q1}&#10;Sigma = {a, b}&#10;q0 = q0&#10;F = {q1}&#10;delta(q0,a) = q1"></textarea>
   <div id="tupleErr"></div>
@@ -499,16 +603,21 @@ O una tabla completa, con «|» o tabuladores como separador:
    ->q0 | q1 | q0
    *q1  | q1 | q0
 
-Q, Σ, q₀ y F son opcionales: si faltan se deducen de las transiciones.</pre>
+Q, Σ, q₀ y F son opcionales: si faltan se deducen de las transiciones.
+
+En modo AFN, además:
+   δ(q0, a) = {q1, q2}      varios destinos para el mismo par (q,a)
+   δ(q0, ε) = q1            transición ε (ε no se declara en Σ)
+   ->q0 | {q1,q2} | ∅       lo mismo, en la tabla</pre>
   </details>
   <div class="acts">
     <button class="btn" id="tupleVision"
       title="Copia un prompt para que un LLM lea la foto de un diagrama hecho a mano y te devuelva la quíntupla lista para pegar aquí">⧉ Prompt: foto de un dibujo → quíntupla</button>
     <button class="btn" id="tupleExample">Ejemplo</button>
-    <button class="btn" id="tupleFromCurrent">Volcar el DFA actual</button>
+    <button class="btn" id="tupleFromCurrent">Volcar el autómata actual</button>
     <div class="spacer" style="flex:1"></div>
     <button class="btn" id="tupleCancel">Cancelar</button>
-    <button class="btn primary" id="tupleGo">Generar DFA</button>
+    <button class="btn primary" id="tupleGo">Generar autómata</button>
   </div>
 </div></div>
 
@@ -526,12 +635,17 @@ Q, Σ, q₀ y F son opcionales: si faltan se deducen de las transiciones.</pre>
 
 /* ==========================================================================
    1. MODELO
-   δ es la fuente de verdad. Las aristas del diagrama son una vista derivada,
-   por lo que el no-determinismo es imposible por construcción: la clave
-   (q, a) sólo admite un destino.
+   δ es la fuente de verdad. Las aristas del diagrama son una vista derivada.
+
+   δ[key(q,a)] es SIEMPRE un array de destinos, y nunca vacío: si se queda sin
+   destinos se borra la clave. El modo decide qué se admite:
+     · AFD — como mucho un destino por par, y ε no etiqueta transiciones.
+     · AFN — cualquier número de destinos, y ε es un símbolo de transición
+             legítimo que NO pertenece a Σ.
    ========================================================================== */
 
 const SEP = "\u0000";                       // separador de clave (q,a)
+const EPS = "ε";                            // transición vacía (nunca en Σ)
 const R = 44;                               // radio del nodo
 const STORE_KEY = "dfa-editor-v1";
 
@@ -542,10 +656,31 @@ let model = blankModel();
 let seq = 0;                                // contador para ids de estado
 
 function blankModel(){
-  return { formatVersion:1, alphabet:["a","b"], states:[], initial:null, delta:{}, language:"" };
+  return { formatVersion:2, kind:"dfa", alphabet:["a","b"], states:[], initial:null, delta:{},
+           language:"", regex:"", regexPlus:"union" };
+}
+
+const isNFA = () => model.kind === "nfa";
+/** Grafías de ε que aceptamos al leer texto de fuera (quíntupla, regex, JSON). */
+const isEpsSym = x => /^(ε|λ|&|epsilon|lambda|\\varepsilon|\\epsilon|\\lambda)$/i.test(String(x).trim());
+/** Símbolos que pueden etiquetar una transición: en AFN, Σ ∪ {ε}. */
+const transSymbols = () => isNFA() ? [...model.alphabet, EPS] : model.alphabet.slice();
+
+/**
+ * Columnas de δ para mostrar. La de ε sólo aparece si el autómata usa alguna
+ * transición vacía — o si la tabla está en modo edición, que es donde se
+ * crean. Una columna entera de ∅ en el LaTeX es ruido.
+ */
+function deltaColumns(forEdit){
+  return (isNFA() && (forEdit || epsTransitions().length))
+    ? [...model.alphabet, EPS] : model.alphabet.slice();
 }
 
 const key      = (q, a) => q + SEP + a;
+/** Destinos de δ(q,a): siempre un array (vacío si la transición no existe). */
+const dsts     = (q, a) => model.delta[key(q, a)] || [];
+/** Atajo para el caso determinista: el único destino, o undefined. */
+const dst      = (q, a) => (model.delta[key(q, a)] || [])[0];
 const unkey    = k => { const i = k.indexOf(SEP); return [k.slice(0,i), k.slice(i+1)]; };
 const getState = id => model.states.find(s => s.id === id) || null;
 const nameOf   = id => (getState(id) || {}).name || "?";
@@ -556,11 +691,13 @@ function deriveEdges(){
   const map = new Map();
   for(const k in model.delta){
     const [from, sym] = unkey(k);
-    const to = model.delta[k];
-    if(!getState(from) || !getState(to)) continue;
-    const gk = from + SEP + to;
-    if(!map.has(gk)) map.set(gk, { from, to, symbols:[] });
-    map.get(gk).symbols.push(sym);
+    if(!getState(from)) continue;
+    for(const to of model.delta[k]){
+      if(!getState(to)) continue;
+      const gk = from + SEP + to;
+      if(!map.has(gk)) map.set(gk, { from, to, symbols:[] });
+      map.get(gk).symbols.push(sym);
+    }
   }
   const order = new Map(model.alphabet.map((s,i)=>[s,i]));
   for(const e of map.values())
@@ -711,7 +848,7 @@ function fontFor(name){
 /* --- render principal ---------------------------------------------------- */
 
 let selectedId = null;
-let hlEdge = null;      // {from,to} resaltado por hover en la tabla
+let hlEdge = null;      // {from, tos:[…]} resaltado por hover en la tabla
 
 function render(){
   renderEdges();
@@ -733,10 +870,10 @@ function renderEdges(){
     grp.dataset.from = e.from; grp.dataset.to = e.to;
 
     let marker = "ah";
-    if(hlEdge && hlEdge.from === e.from && hlEdge.to === e.to){ grp.classList.add("hl"); marker = "ah-hl"; }
+    if(hlEdge && hlEdge.from === e.from && hlEdge.tos.includes(e.to)){ grp.classList.add("hl"); marker = "ah-hl"; }
     if(sim.active && sim.idx > 0){
       const st = sim.steps[sim.idx-1];
-      if(st && st.from === e.from && st.to === e.to){ grp.classList.add("active"); marker = "ah-ac"; }
+      if(st && st.edges.some(x => x.from === e.from && x.to === e.to)){ grp.classList.add("active"); marker = "ah-ac"; }
     }
 
     grp.appendChild(el("path", { class:"edge-path", d:g.d, "marker-end":`url(#${marker})` }));
@@ -760,7 +897,7 @@ function renderNodes(){
     g.dataset.id = s.id;
     if(s.id === selectedId) g.classList.add("sel");
     if(hlEdge && hlEdge.from === s.id) g.classList.add("hl");
-    if(sim.active && sim.cursorState === s.id) g.classList.add("cur");
+    if(sim.active && sim.cursor.includes(s.id)) g.classList.add("cur");
     else if(!sim.active && s.id === model.initial) g.classList.add("src");
     if(drag.type === "edge" && drag.fromId === s.id) g.classList.add("src");
 
@@ -784,7 +921,7 @@ function renderNodes(){
  */
 function applyHighlight(){
   for(const g of $$("#gEdges .edge")){
-    const on = !!(hlEdge && g.dataset.from === hlEdge.from && g.dataset.to === hlEdge.to);
+    const on = !!(hlEdge && g.dataset.from === hlEdge.from && hlEdge.tos.includes(g.dataset.to));
     g.classList.toggle("hl", on);
     const p = g.querySelector(".edge-path");
     if(p) p.setAttribute("marker-end",
@@ -803,6 +940,7 @@ function commit(){
   renderTable();
   renderTex();
   renderValidation();
+  renderRegex();
   refreshSim();
   save();
 }
@@ -840,7 +978,9 @@ function removeState(id){
   model.states = model.states.filter(s => s.id !== id);
   for(const k in model.delta){
     const [from] = unkey(k);
-    if(from === id || model.delta[k] === id) delete model.delta[k];
+    if(from === id){ delete model.delta[k]; continue; }
+    const rest = model.delta[k].filter(t => t !== id);
+    if(rest.length) model.delta[k] = rest; else delete model.delta[k];
   }
   if(model.initial === id) model.initial = model.states.length ? model.states[0].id : null;
   if(selectedId === id) selectedId = null;
@@ -858,24 +998,123 @@ function renameState(id, raw){
   commit();
 }
 
-/** Asigna δ(from, sym) = to, retirando el símbolo de donde estuviera. */
-function setDelta(from, sym, to){
+/**
+ * Escribe δ(from, sym) = lista de destinos. Normaliza: descarta repetidos y
+ * fantasmas, ordena como Q y BORRA la clave si el conjunto queda vacío —
+ * ningún recorrido de model.delta debe toparse con un array vacío.
+ * No hace commit(): es la primitiva sobre la que se apoyan las demás.
+ */
+function setDsts(from, sym, list){
+  const order = new Map(model.states.map((s, i) => [s.id, i]));
+  const out = [];
+  for(const t of list) if(t && getState(t) && !out.includes(t)) out.push(t);
+  out.sort((a, b) => order.get(a) - order.get(b));
   const k = key(from, sym);
-  const prev = model.delta[k];
-  if(to === null || to === undefined) delete model.delta[k];
-  else model.delta[k] = to;
+  if(out.length) model.delta[k] = out; else delete model.delta[k];
+  return out;
+}
+
+/** AFD: asigna δ(from, sym) = to, retirando el símbolo de donde estuviera. */
+function setDelta(from, sym, to){
+  const prev = dst(from, sym);
+  setDsts(from, sym, (to === null || to === undefined) ? [] : [to]);
   if(prev && to && prev !== to)
     toast(`δ(${nameOf(from)}, ${sym}) se reasignó de ${nameOf(prev)} a ${nameOf(to)}`, "warn");
   commit();
 }
 
+/** AFN: añade un destino más a δ(from, sym) sin tocar los que ya había. */
+function addDelta(from, sym, to){
+  setDsts(from, sym, [...dsts(from, sym), to]);
+  commit();
+}
+
+/** Alterna el destino «to» en δ(from, sym): en AFD reasigna, en AFN acumula. */
+function toggleDelta(from, sym, to){
+  const cur = dsts(from, sym);
+  if(cur.includes(to)){ setDsts(from, sym, cur.filter(t => t !== to)); commit(); }
+  else if(isNFA()) addDelta(from, sym, to);
+  else setDelta(from, sym, to);
+}
+
 function removeEdge(from, to){
   for(const k in model.delta){
     const [f] = unkey(k);
-    if(f === from && model.delta[k] === to) delete model.delta[k];
+    if(f !== from) continue;
+    const rest = model.delta[k].filter(t => t !== to);
+    if(rest.length) model.delta[k] = rest; else delete model.delta[k];
   }
   commit();
 }
+
+/* --- modo AFD / AFN ------------------------------------------------------ */
+
+/** Pares (q,a) con más de un destino: lo que impide llamar AFD al autómata. */
+function nondetPairs(){
+  const out = [];
+  for(const k in model.delta){
+    const [q, a] = unkey(k);
+    if(a !== EPS && model.delta[k].length > 1) out.push({ q, a, tos:model.delta[k] });
+  }
+  return out;
+}
+/** Transiciones ε presentes en δ. */
+function epsTransitions(){
+  const out = [];
+  for(const k in model.delta){
+    const [q, a] = unkey(k);
+    if(a === EPS) out.push({ q, tos:model.delta[k] });
+  }
+  return out;
+}
+
+/**
+ * Cambia entre AFD y AFN. Pasar a AFD exige que el autómata ya sea
+ * determinista; si no lo es se ofrece la construcción de subconjuntos, en vez
+ * de mutilar δ por la fuerza para que encaje en el modo.
+ */
+async function setKind(k){
+  if(k === model.kind){ syncKindUI(); return; }
+  if(k === "dfa"){
+    const nd = nondetPairs(), eps = epsTransitions();
+    if(nd.length || eps.length){
+      const ok = await confirmBox(
+        "Este autómata no es determinista:\n" +
+        (nd.length  ? `· ${nd.length} par(es) (q,a) con más de un destino.\n` : "") +
+        (eps.length ? `· ${eps.length} transición(es) ε.\n` : "") +
+        "\nAceptar: construyo el AFD equivalente por subconjuntos y cambio de modo.\n" +
+        "Cancelar: sigue en modo AFN.");
+      if(!ok){ syncKindUI(); return; }
+      determinizeModel();
+      return;
+    }
+  }
+  model.kind = k;
+  syncKindUI();
+  commit();
+  toast(k === "nfa" ? "Modo AFN: δ(q,a) admite varios destinos y transiciones ε"
+                    : "Modo AFD: δ(q,a) tiene exactamente un destino", "ok");
+}
+
+/** Refleja el modo en los rótulos que cambian de significado con él. */
+function syncKindUI(){
+  const nfa = isNFA();
+  const bd = $("#kindDfa"), bn = $("#kindNfa");
+  if(bd) bd.classList.toggle("on", !nfa);
+  if(bn){ bn.classList.toggle("on", nfa); bn.classList.toggle("nfa", nfa); }
+  const th = $("#tblHead");
+  if(th) th.textContent = nfa ? "δ : Q × (Σ ∪ {ε}) → P(Q)" : "δ : Q × Σ → Q";
+  const ah = $("#alphaHint");
+  if(ah) ah.textContent = "Separa varios con coma o espacio. Se admiten símbolos de más de un carácter. "
+    + (nfa ? "ε no va en Σ: se añade como símbolo de una transición."
+           : "Un AFD no admite ε.");
+  const tt = $("#tupleTitle");
+  if(tt) tt.innerHTML = `Generar ${nfa ? "AFN" : "AFD"} desde su quíntupla <small>M = (Q, Σ, δ, q₀, F)</small>`;
+  const pt = $("#pitemTrap");
+  if(pt) pt.style.display = nfa ? "none" : "";
+}
+if($("#kindDfa")) $("#kindDfa").onclick = () => setKind("dfa");
+if($("#kindNfa")) $("#kindNfa").onclick = () => setKind("nfa");
 
 /* ==========================================================================
    5. ALFABETO
@@ -904,8 +1143,10 @@ function addSymbols(text){
   const parts = text.split(/[\s,]+/).filter(Boolean);
   let added = 0;
   for(const p of parts){
-    if(p === "ε" || p === "\\varepsilon" || p.toLowerCase() === "epsilon"){
-      toast("Un DFA no admite transiciones ε: no se puede añadir a Σ", "err"); continue;
+    if(isEpsSym(p)){
+      toast(isNFA() ? "ε nunca está en Σ: créala como símbolo de una transición (clic en la arista → ε)"
+                    : "Un AFD no admite transiciones ε: no se puede añadir a Σ", "err");
+      continue;
     }
     if(model.alphabet.includes(p)){ toast(`«${p}» ya está en Σ`, "warn"); continue; }
     model.alphabet.push(p); added++;
@@ -1180,7 +1421,7 @@ const PALETTE_LABEL = { normal:"Estado", accept:"Estado de aceptación", trap:"E
 function dropPalette(kind, x, y){
   if(kind === "trap"){
     const s = addState(x, y, "qtrap", { accepting:false });
-    for(const a of model.alphabet) model.delta[key(s.id, a)] = s.id;   // bucle absorbente
+    for(const a of model.alphabet) setDsts(s.id, a, [s.id]);           // bucle absorbente
     commit();
     toast(model.alphabet.length
       ? `${s.name} creado: absorbe ${model.alphabet.length} símbolo(s) de Σ`
@@ -1277,10 +1518,11 @@ function openEdgePopover(from, to, cx, cy){
   const pop = document.createElement("div");
   pop.className = "pop";
 
+  const setLbl = isNFA() ? "Σ ∪ {ε}" : "Σ";
   const h = document.createElement("h5");
   h.innerHTML = from === to
-    ? `↺ bucle en <b>${escHtml(nameOf(from))}</b> · símbolos de Σ`
-    : `<b>${escHtml(nameOf(from))}</b> ⟶ <b>${escHtml(nameOf(to))}</b> · símbolos de Σ`;
+    ? `↺ bucle en <b>${escHtml(nameOf(from))}</b> · símbolos de ${setLbl}`
+    : `<b>${escHtml(nameOf(from))}</b> ⟶ <b>${escHtml(nameOf(to))}</b> · símbolos de ${setLbl}`;
   pop.appendChild(h);
 
   const grid = document.createElement("div");
@@ -1288,15 +1530,23 @@ function openEdgePopover(from, to, cx, cy){
   if(!model.alphabet.length){
     grid.innerHTML = '<span class="empty">Σ está vacío: añade símbolos en la barra lateral.</span>';
   }
-  for(const sym of model.alphabet){
-    const cur = model.delta[key(from, sym)];
+  for(const sym of transSymbols()){
+    const here = dsts(from, sym);
+    const on = here.includes(to);
+    const others = here.filter(t => t !== to);
     const b = document.createElement("button");
-    b.className = "sym" + (cur === to ? " on" : cur ? " taken" : "");
+    b.className = "sym" + (on ? " on" : others.length ? " taken" : "");
     b.textContent = sym;
-    if(cur && cur !== to){ b.dataset.to = nameOf(cur); b.title = `Ahora δ(${nameOf(from)}, ${sym}) = ${nameOf(cur)}. Clic para reasignar aquí.`; }
-    else b.title = cur === to ? "Clic para quitar este símbolo de la arista" : "Clic para añadir este símbolo";
+    if(others.length){
+      b.dataset.to = others.map(nameOf).join(",");
+      b.title = isNFA()
+        ? `δ(${nameOf(from)}, ${sym}) ya llega a ${others.map(nameOf).join(", ")}. Clic para añadir también ${nameOf(to)}.`
+        : `Ahora δ(${nameOf(from)}, ${sym}) = ${nameOf(others[0])}. Clic para reasignar aquí.`;
+    }else{
+      b.title = on ? "Clic para quitar este símbolo de la arista" : "Clic para añadir este símbolo";
+    }
     b.onclick = () => {
-      setDelta(from, sym, cur === to ? null : to);
+      toggleDelta(from, sym, to);
       openEdgePopover(from, to, cx, cy);
     };
     grid.appendChild(b);
@@ -1307,7 +1557,10 @@ function openEdgePopover(from, to, cx, cy){
   foot.className = "popFoot";
   const all = document.createElement("button");
   all.className = "btn sm"; all.textContent = "Todos";
-  all.onclick = () => { for(const s of model.alphabet) model.delta[key(from,s)] = to; commit(); openEdgePopover(from,to,cx,cy); };
+  all.onclick = () => {
+    for(const sy of model.alphabet) setDsts(from, sy, isNFA() ? [...dsts(from, sy), to] : [to]);
+    commit(); openEdgePopover(from, to, cx, cy);
+  };
   const del = document.createElement("button");
   del.className = "btn sm"; del.textContent = "Eliminar arista";
   del.onclick = () => { removeEdge(from, to); closePopover(); };
@@ -1386,7 +1639,8 @@ function renderTable(){
   const thead = document.createElement("thead");
   const hr = document.createElement("tr");
   const th0 = document.createElement("th"); th0.textContent = "δ"; hr.appendChild(th0);
-  for(const sym of model.alphabet){
+  const cols = deltaColumns(editable);
+  for(const sym of cols){
     const th = document.createElement("th"); th.textContent = sym; hr.appendChild(th);
   }
   thead.appendChild(hr); tbl.appendChild(thead);
@@ -1401,28 +1655,36 @@ function renderTable(){
                  + escHtml(s.name);
     tr.appendChild(th);
 
-    for(const sym of model.alphabet){
+    for(const sym of cols){
       const td = document.createElement("td");
-      const to = model.delta[key(s.id, sym)];
+      const tos = dsts(s.id, sym);
       td.dataset.from = s.id; td.dataset.sym = sym;
 
-      if(editable){
+      if(editable && isNFA()){
+        // En AFN la celda es un conjunto: se escribe a mano, separado por comas.
+        const inp = document.createElement("input");
+        inp.value = tos.map(nameOf).join(", ");
+        inp.placeholder = "∅";
+        inp.onchange = () => setCellFromNames(s.id, sym, inp.value);
+        td.appendChild(inp);
+      }else if(editable){
         const sel = document.createElement("select");
         const o0 = document.createElement("option"); o0.value = ""; o0.textContent = "—"; sel.appendChild(o0);
         for(const t of model.states){
           const o = document.createElement("option"); o.value = t.id; o.textContent = t.name;
-          if(t.id === to) o.selected = true;
+          if(t.id === tos[0]) o.selected = true;
           sel.appendChild(o);
         }
         sel.onchange = () => setDelta(s.id, sym, sel.value || null);
         td.appendChild(sel);
       }else{
-        td.textContent = to ? nameOf(to) : "—";
-        if(!to) td.classList.add("undef");
+        td.textContent = cellText(tos);
+        if(!tos.length && !isNFA()) td.classList.add("undef");
+        if(tos.length > 1) td.classList.add("nd");
       }
 
-      if(to){
-        td.onmouseenter = () => { hlEdge = { from:s.id, to }; applyHighlight(); };
+      if(tos.length){
+        td.onmouseenter = () => { hlEdge = { from:s.id, tos }; applyHighlight(); };
         td.onmouseleave = () => { hlEdge = null; applyHighlight(); };
       }
       tr.appendChild(td);
@@ -1433,9 +1695,30 @@ function renderTable(){
   box.appendChild(tbl);
 }
 
+/** Texto de una celda de δ: «q1», «{q1, q2}», «—» (AFD) o «∅» (AFN). */
+function cellText(tos){
+  if(!tos.length) return isNFA() ? "∅" : "—";
+  return tos.length === 1 ? nameOf(tos[0]) : "{" + tos.map(nameOf).join(", ") + "}";
+}
+
+/** Aplica lo escrito en una celda del AFN: nombres de estado separados por comas. */
+function setCellFromNames(from, sym, raw){
+  const txt = String(raw).replace(/[{}]/g, " ").trim();
+  const names = txt ? txt.split(/[\s,;]+/).filter(Boolean) : [];
+  const ids = [];
+  for(const n of names){
+    const st = model.states.find(x => x.name === n);
+    if(!st){ toast(`No existe ningún estado llamado «${n}»`, "err"); renderTable(); return; }
+    ids.push(st.id);
+  }
+  setDsts(from, sym, ids);
+  commit();
+}
+
 function markCells(){
   $$("#tableBox td").forEach(td => {
-    const on = hlEdge && td.dataset.from === hlEdge.from && model.delta[key(td.dataset.from, td.dataset.sym)] === hlEdge.to;
+    const on = hlEdge && td.dataset.from === hlEdge.from &&
+               dsts(td.dataset.from, td.dataset.sym).some(t => hlEdge.tos.includes(t));
     td.classList.toggle("hl", !!on);
   });
 }
@@ -1445,8 +1728,8 @@ $("#tblEdit").onchange = renderTable;
 // Resaltado inverso: pasar el ratón por una arista marca sus celdas en la tabla.
 gEdges.addEventListener("mouseover", ev => {
   const g = ev.target.closest(".edge"); if(!g) return;
-  if(hlEdge && hlEdge.from === g.dataset.from && hlEdge.to === g.dataset.to) return;
-  hlEdge = { from:g.dataset.from, to:g.dataset.to };
+  if(hlEdge && hlEdge.from === g.dataset.from && hlEdge.tos.length === 1 && hlEdge.tos[0] === g.dataset.to) return;
+  hlEdge = { from:g.dataset.from, tos:[g.dataset.to] };
   applyHighlight();
 });
 gEdges.addEventListener("mouseout", ev => {
@@ -1458,11 +1741,14 @@ gEdges.addEventListener("mouseout", ev => {
 });
 
 $("#btnCopyTsv").onclick = () => {
-  const rows = [["delta", ...model.alphabet].join("\t")];
+  const cols = deltaColumns(false);
+  const rows = [["delta", ...cols].join("\t")];
   for(const s of model.states){
     const tag = (s.id === model.initial ? "->" : "") + (s.accepting ? "*" : "");
-    rows.push([tag + s.name, ...model.alphabet.map(a => {
-      const t = model.delta[key(s.id, a)]; return t ? nameOf(t) : "-";
+    rows.push([tag + s.name, ...cols.map(a => {
+      const tos = dsts(s.id, a);
+      return tos.length ? (tos.length === 1 ? nameOf(tos[0]) : "{" + tos.map(nameOf).join(",") + "}")
+                        : (isNFA() ? "∅" : "-");
     })].join("\t"));
   }
   copyText(rows.join("\n"), "Tabla");
@@ -1484,31 +1770,37 @@ function texName(name){
   return `\\text{${texEscape(name)}}`;
 }
 function texSym(sym){
+  if(sym === EPS) return "\\varepsilon";
   if(/^[A-Za-z0-9]$/.test(sym)) return sym;
   return `\\text{${texEscape(sym)}}`;
 }
+
+/** Celda de δ en LaTeX: q' (AFD), \{q1, q2\} (AFN), ⊥ / ∅ si no hay destino. */
+function texCell(tos){
+  if(!tos.length) return isNFA() ? "\\varnothing" : "\\bot";
+  if(!isNFA()) return texOf(tos[0]);
+  return "\\{ " + tos.map(texOf).join(", ") + " \\}";
+}
 const texOf = id => texName(nameOf(id));
 
+/** Pares (q,a) de Q × Σ sin destino. En un AFD son un defecto; en un AFN, no. */
 function missingPairs(){
   const out = [];
   for(const s of model.states)
     for(const a of model.alphabet)
-      if(!model.delta[key(s.id, a)]) out.push([s.id, a]);
+      if(!dsts(s.id, a).length) out.push([s.id, a]);
   return out;
 }
 
 function buildTexArray(){
-  const A = model.alphabet;
+  const A = deltaColumns(false);
   if(!model.states.length || !A.length) return "% Define estados y símbolos de Σ para generar la tabla.";
   const lines = [];
   lines.push(`\\begin{array}{c|${"c".repeat(A.length)}}`);
   lines.push(`\\delta & ${A.map(texSym).join(" & ")} \\\\ \\hline`);
   model.states.forEach((s, i) => {
     const tag = (s.id === model.initial ? "\\to " : "") + (s.accepting ? "{*}" : "");
-    const cells = A.map(a => {
-      const t = model.delta[key(s.id, a)];
-      return t ? texOf(t) : "\\bot";
-    });
+    const cells = A.map(a => texCell(dsts(s.id, a)));
     lines.push(`${tag}${texName(s.name)} & ${cells.join(" & ")}${i < model.states.length-1 ? " \\\\" : ""}`);
   });
   lines.push(`\\end{array}`);
@@ -1517,6 +1809,8 @@ function buildTexArray(){
 
 function buildTexFull(){
   if(!model.states.length) return "% El autómata está vacío: crea algunos estados.";
+  const nfa = isNFA();
+  const CLASE = nfa ? "no determinista" : "determinista";
   const Q = model.states.map(s => texName(s.name)).join(", ");
   const S = model.alphabet.map(texSym).join(", ");
   const F = model.states.filter(s => s.accepting).map(s => texName(s.name));
@@ -1524,11 +1818,11 @@ function buildTexFull(){
   const miss = missingPairs();
 
   const out = [];
-  out.push("% Autómata finito determinista — generado con dfa-editor.html");
+  out.push(`% Autómata finito ${CLASE} — generado con dfa-editor.html`);
   if(model.language.trim())
     out.push(...model.language.trim().split("\n").map(l => "% Lenguaje objetivo: " + l));
   out.push("");
-  out.push("Sea $M = (Q, \\Sigma, \\delta, q_0, F)$ el autómata finito determinista con");
+  out.push(`Sea $M = (Q, \\Sigma, \\delta, q_0, F)$ el autómata finito ${CLASE} con`);
   out.push("\\[");
   out.push(`  Q = \\{ ${Q} \\}, \\qquad`);
   out.push(`  \\Sigma = \\{ ${S} \\}, \\qquad`);
@@ -1536,24 +1830,31 @@ function buildTexFull(){
   out.push(`  F = ${F.length ? "\\{ " + F.join(", ") + " \\}" : "\\varnothing"}.`);
   out.push("\\]");
   out.push("");
-  out.push("La función de transición $\\delta : Q \\times \\Sigma \\to Q$ viene dada por la tabla");
+  out.push("La función de transición $" +
+    (nfa ? "\\delta : Q \\times (\\Sigma \\cup \\{\\varepsilon\\}) \\to \\mathcal{P}(Q)"
+         : "\\delta : Q \\times \\Sigma \\to Q") + "$ viene dada por la tabla");
   out.push("\\[");
   out.push(buildTexArray().split("\n").map(l => "  " + l).join("\n"));
   out.push("\\]");
   out.push("donde $\\to$ marca el estado inicial y $*$ los estados de aceptación.");
-  if(miss.length){
+  if(miss.length && !nfa){
     out.push("");
     out.push(`% ATENCIÓN: δ es parcial. Faltan ${miss.length} par(es) (q,a); se indican con \\bot.`);
     out.push(`% Un DFA completo exige que δ esté definida para todo (q,a) ∈ Q × Σ.`);
+  }
+  if(nfa){
+    const nd = nondetPairs(), eps = epsTransitions();
+    out.push("");
+    out.push(`% AFN: ${nd.length} par(es) (q,a) con más de un destino y ${eps.length} transición(es) ε.`);
+    out.push("% δ(q,a) = ∅ significa que la rama muere; no es un defecto en un AFN.");
   }
   out.push("");
   out.push("Explícitamente:");
   out.push("\\begin{align*}");
   const eqs = [];
   for(const s of model.states)
-    for(const a of model.alphabet){
-      const t = model.delta[key(s.id, a)];
-      eqs.push(`  \\delta(${texName(s.name)}, ${texSym(a)}) &= ${t ? texOf(t) : "\\bot"}`);
+    for(const a of deltaColumns(false)){
+      eqs.push(`  \\delta(${texName(s.name)}, ${texSym(a)}) &= ${texCell(dsts(s.id, a))}`);
     }
   out.push(eqs.join(" \\\\\n"));
   out.push("\\end{align*}");
@@ -1596,7 +1897,7 @@ function buildPrompt(){
   const L = model.language.trim() || "(describe aquí el lenguaje objetivo en el panel lateral)";
   const miss = missingPairs();
   const out = [];
-  out.push("Te paso un autómata finito determinista M descrito en LaTeX.");
+  out.push(`Te paso un autómata finito ${isNFA() ? "no determinista (AFN)" : "determinista (AFD)"} M descrito en LaTeX.`);
   out.push("");
   out.push("--- AUTÓMATA ---");
   out.push(buildTexFull());
@@ -1605,6 +1906,14 @@ function buildPrompt(){
   out.push("El lenguaje que M debería reconocer es:");
   out.push("");
   out.push("  L = " + L.replace(/^L\s*=\s*/i, ""));
+  if(model.regex.trim()){
+    out.push("");
+    out.push("Y la expresión regular que se propone como equivalente es:");
+    out.push("");
+    out.push("  r = " + model.regex.trim());
+    out.push("");
+    out.push("(«+» significa " + (model.regexPlus === "closure" ? "clausura positiva" : "unión") + " en esa notación.)");
+  }
   out.push("");
   out.push("Tareas:");
   out.push("1. Describe con precisión el lenguaje L(M) que realmente reconoce M");
@@ -1615,6 +1924,13 @@ function buildPrompt(){
   out.push("   (w ∈ L pero w ∉ L(M)). Muestra la traza de estados de esa cadena.");
   out.push("4. Si son iguales, da un argumento de corrección por inducción sobre |w|");
   out.push("   usando los invariantes del punto 1.");
+  if(model.regex.trim())
+    out.push("5. Haz lo mismo con r: ¿es L(r) = L(M)? Si no, da la cadena más corta que las separe.");
+  if(isNFA()){
+    out.push("");
+    out.push("NOTA: M es un AFN. δ(q,a) es un conjunto de estados (posiblemente vacío) y");
+    out.push("puede haber transiciones ε. Una cadena se acepta si ALGUNA rama termina en F.");
+  }
   if(miss.length){
     out.push("");
     out.push(`NOTA: δ es parcial — faltan ${miss.length} par(es) (q,a), marcados con \\bot.`);
@@ -1634,9 +1950,10 @@ function buildPrompt(){
  * al leerlo, la evaluación posterior de los requisitos de diseño no vale nada.
  */
 function buildVisionPrompt(){
+  const nfa = isNFA();
   const out = [];
   out.push("Te adjunto la foto de un diagrama de estados dibujado a mano.");
-  out.push("Transcríbelo a la quíntupla de un autómata finito determinista (AFD)");
+  out.push(`Transcríbelo a la quíntupla de un autómata finito ${nfa ? "NO determinista (AFN)" : "determinista (AFD)"}`);
   out.push("con el formato exacto que te indico más abajo.");
   out.push("");
   out.push("REGLA PRINCIPAL");
@@ -1654,6 +1971,12 @@ function buildVisionPrompt(){
   out.push("· Etiqueta con varios símbolos («a, b») = una transición por símbolo, todas");
   out.push("  al mismo destino.");
   out.push("· Lazo que sale de un círculo y vuelve a él = transición del estado a sí mismo.");
+  if(nfa){
+    out.push("· Es un AFN: un mismo estado PUEDE tener dos flechas con el mismo símbolo hacia");
+    out.push("  destinos distintos. Transcríbelas todas: δ(A, x) = {B, C}.");
+    out.push("· Una flecha etiquetada ε (o λ) es una transición vacía: δ(A, ε) = B.");
+    out.push("· Que falte el par (q,a) es normal en un AFN: significa δ(q,a) = ∅. No lo inventes.");
+  }
   out.push("· Si un estado no tiene nombre legible, llámalo q0, q1, q2… en orden de");
   out.push("  lectura (izquierda a derecha, arriba abajo) y avísame de ello.");
   out.push("");
@@ -1682,9 +2005,14 @@ function buildVisionPrompt(){
   out.push("· Símbolos o nombres que no se leen bien, y qué has supuesto.");
   out.push("· Pares (estado, símbolo) que no aparecen en el dibujo: NO los inventes,");
   out.push("  simplemente dime cuáles faltan.");
-  out.push("· Dos flechas que salgan del mismo estado con el mismo símbolo hacia destinos");
-  out.push("  distintos: transcribe la que se vea con más claridad y avísame, porque eso");
-  out.push("  rompe el determinismo y no es un AFD válido.");
+  if(nfa){
+    out.push("· Flechas cuyo destino no se distingue bien cuando salen varias con el mismo");
+    out.push("  símbolo: dime cuáles has agrupado en el mismo conjunto y por qué.");
+  }else{
+    out.push("· Dos flechas que salgan del mismo estado con el mismo símbolo hacia destinos");
+    out.push("  distintos: transcribe la que se vea con más claridad y avísame, porque eso");
+    out.push("  rompe el determinismo y no es un AFD válido.");
+  }
   out.push("· Si hay más de un estado inicial, o ninguno.");
 
   // Pistas opcionales: sólo para desambiguar la lectura, nunca para reescribir el dibujo.
@@ -1725,7 +2053,47 @@ $("#btnCopyTex").onclick = () => copyText(currentTex(),
    11. SIMULADOR
    ========================================================================== */
 
-let sim = { active:false, tokens:[], steps:[], idx:0, cursorState:null, status:null, errAt:-1 };
+/**
+ * El simulador trabaja SIEMPRE con conjuntos de estados: en un AFD todos los
+ * conjuntos son unitarios, así que no hacen falta dos caminos de código.
+ *   sim.cursor        conjunto de estados activos ahora
+ *   sim.steps[i]      { from:[…], sym, to:[…], edges:[{from,to}] }
+ */
+let sim = { active:false, tokens:[], steps:[], idx:0, cursor:[], status:null, errAt:-1 };
+
+/** Ordena un conjunto de estados como Q, para que la traza no baile. */
+function sortStates(ids){
+  const order = new Map(model.states.map((s, i) => [s.id, i]));
+  return [...ids].sort((a, b) => (order.get(a) ?? 1e9) - (order.get(b) ?? 1e9));
+}
+
+/** «q0» para un estado, «{q0, q1}» para un conjunto, «∅» si está vacío. */
+const setLabel = ids => !ids.length ? "∅"
+                      : ids.length === 1 ? nameOf(ids[0])
+                      : "{" + ids.map(nameOf).join(", ") + "}";
+
+/** ε-clausura de un conjunto de estados (la identidad en modo AFD). */
+function closureOf(ids){
+  const out = [], seen = new Set();
+  for(const q of ids) if(q && !seen.has(q)){ seen.add(q); out.push(q); }
+  for(let i = 0; i < out.length; i++)
+    for(const t of dsts(out[i], EPS)) if(!seen.has(t)){ seen.add(t); out.push(t); }
+  return sortStates(out);
+}
+
+/** Un paso de lectura: conjunto resultante y aristas realmente recorridas. */
+function stepSet(cur, a){
+  const reached = [], edges = [];
+  for(const q of cur)
+    for(const t of dsts(q, a)){
+      edges.push({ from:q, to:t });
+      if(!reached.includes(t)) reached.push(t);
+    }
+  const to = closureOf(reached);
+  for(const q of to)                                   // las ε recorridas al cerrar
+    for(const t of dsts(q, EPS)) if(to.includes(t)) edges.push({ from:q, to:t });
+  return { to, edges };
+}
 
 /** Tokeniza por coincidencia más larga (permite símbolos multicarácter). */
 function tokenize(str){
@@ -1741,19 +2109,25 @@ function tokenize(str){
   return { tokens, badAt:-1 };
 }
 
-/** Ejecuta la cadena; devuelve pasos y veredicto. */
+/**
+ * Ejecuta la cadena; devuelve pasos y veredicto.
+ * Estados posibles: accept · reject · noinit · undef (AFD: δ indefinida) ·
+ * blocked (AFN: todas las ramas mueren antes de terminar).
+ */
 function runTokens(tokens){
   const steps = [];
   if(!model.initial) return { steps, status:"noinit" };
-  let cur = model.initial;
+  let cur = closureOf([model.initial]);
   for(const a of tokens){
-    const next = model.delta[key(cur, a)];
-    if(!next) return { steps, status:"undef", stuckAt:cur, stuckSym:a };
-    steps.push({ from:cur, sym:a, to:next });
-    cur = next;
+    const st = stepSet(cur, a);
+    if(!st.to.length)
+      return isNFA() ? { steps, status:"blocked", stuckSet:cur, stuckSym:a }
+                     : { steps, status:"undef",  stuckAt:cur[0], stuckSym:a };
+    steps.push({ from:cur, sym:a, to:st.to, edges:st.edges });
+    cur = st.to;
   }
-  const s = getState(cur);
-  return { steps, status: s && s.accepting ? "accept" : "reject", final:cur };
+  return { steps, final:cur,
+           status: cur.some(q => (getState(q) || {}).accepting) ? "accept" : "reject" };
 }
 
 function refreshSim(){
@@ -1768,16 +2142,17 @@ function runSimulation(resetIdx){
   sim.errAt = badAt;
 
   if(badAt >= 0){
-    sim.active = true; sim.steps = []; sim.idx = 0; sim.cursorState = null; sim.status = "badsym";
+    sim.active = true; sim.steps = []; sim.idx = 0; sim.cursor = []; sim.status = "badsym";
     paintSim(raw); render(); return;
   }
   const r = runTokens(tokens);
   sim.steps = r.steps; sim.status = r.status;
-  sim.stuckSym = r.stuckSym; sim.stuckAt = r.stuckAt;
+  sim.stuckSym = r.stuckSym; sim.stuckAt = r.stuckAt; sim.stuckSet = r.stuckSet;
   sim.active = true;
   const max = r.steps.length;
   if(resetIdx || sim.idx > max) sim.idx = Math.min(sim.idx, max);
-  sim.cursorState = sim.idx === 0 ? model.initial : (r.steps[sim.idx-1] || {}).to;
+  sim.cursor = sim.idx === 0 ? (model.initial ? closureOf([model.initial]) : [])
+                             : ((r.steps[sim.idx-1] || {}).to || []);
   paintSim(raw);
   render();
 }
@@ -1809,10 +2184,10 @@ function paintSim(raw){
     : '<span class="done">ε (cadena vacía)</span>';
 
   // traza
-  const parts = [`<span class="${sim.idx===0?"cur":"dim"}">${escHtml(nameOf(model.initial))}</span>`];
+  const parts = [`<span class="${sim.idx===0?"cur":"dim"}">${escHtml(setLabel(closureOf([model.initial])))}</span>`];
   sim.steps.slice(0, sim.idx).forEach((st, i) => {
     parts.push(` <span class="sym">──${escHtml(st.sym)}──▶</span> `);
-    parts.push(`<span class="${i===sim.idx-1?"cur":"dim"}">${escHtml(nameOf(st.to))}</span>`);
+    parts.push(`<span class="${i===sim.idx-1?"cur":"dim"}">${escHtml(setLabel(st.to))}</span>`);
   });
   if(sim.idx < sim.steps.length) parts.push(' <span class="dim">…</span>');
   TR.innerHTML = parts.join("");
@@ -1820,6 +2195,8 @@ function paintSim(raw){
   // veredicto (sólo definitivo cuando se ha consumido toda la cadena)
   if(sim.status === "undef"){
     V.innerHTML = `<span class="verdict err">Rechaza — δ(${escHtml(nameOf(sim.stuckAt))}, ${escHtml(sim.stuckSym)}) indefinida</span>`;
+  }else if(sim.status === "blocked"){
+    V.innerHTML = `<span class="verdict rej">✗ Rechaza — todas las ramas mueren: δ(${escHtml(setLabel(sim.stuckSet || []))}, ${escHtml(sim.stuckSym)}) = ∅</span>`;
   }else if(!atEnd){
     V.innerHTML = `<span class="verdict err" style="background:none;border-color:var(--line);color:var(--fg2)">paso ${sim.idx} / ${sim.tokens.length}</span>`;
   }else if(sim.status === "accept"){
@@ -1857,10 +2234,11 @@ $("#btnBatch").onclick = () => {
       const r = runTokens(tokens);
       if(r.status === "accept"){ c2.className = "a"; c2.textContent = "acepta"; }
       else if(r.status === "undef"){ c2.className = "e"; c2.textContent = `δ(${nameOf(r.stuckAt)}, ${r.stuckSym}) indefinida`; }
+      else if(r.status === "blocked"){ c2.className = "r"; c2.textContent = "rechaza (todas las ramas mueren)"; }
       else if(r.status === "noinit"){ c2.className = "e"; c2.textContent = "sin estado inicial"; }
       else { c2.className = "r"; c2.textContent = "rechaza"; }
       c3.textContent = model.initial
-        ? nameOf(model.initial) + r.steps.map(s => ` -${s.sym}-> ` + nameOf(s.to)).join("")
+        ? setLabel(closureOf([model.initial])) + r.steps.map(s => ` -${s.sym}-> ` + setLabel(s.to)).join("")
         : "";
     }
     tr.append(c1, c2, c3); tb.appendChild(tr);
@@ -1874,33 +2252,62 @@ $("#btnBatch").onclick = () => {
 
 function analyze(){
   const issues = [];
+  const nfa = isNFA();
   const miss = missingPairs();
+  const nd = nondetPairs(), eps = epsTransitions();
 
   if(!model.states.length) issues.push({ lv:"err", ic:"!", html:"No hay estados: <code>Q = ∅</code>." });
   if(!model.alphabet.length) issues.push({ lv:"err", ic:"!", html:"El alfabeto <code>Σ</code> está vacío." });
   if(!model.initial && model.states.length)
     issues.push({ lv:"err", ic:"!", html:"No hay <b>estado inicial</b>. Marca uno con <code>→</code>." });
 
-  if(miss.length){
-    const shown = miss.slice(0, 12).map(([q,a]) => `<code>(${escHtml(nameOf(q))}, ${escHtml(a)})</code>`).join(" ");
+  const listPairs = ps => ps.slice(0, 12).map(([q,a]) =>
+    `<code>(${escHtml(nameOf(q))}, ${escHtml(a)})</code>`).join(" ") + (ps.length > 12 ? " …" : "");
+
+  if(!nfa && miss.length){
     issues.push({ lv:"err", ic:"!", html:
       `<b>δ no es total</b>: faltan ${miss.length} par(es) de <code>Q × Σ</code>. ` +
-      `Un DFA exige δ definida para todos. ${shown}${miss.length > 12 ? " …" : ""}` });
+      `Un DFA exige δ definida para todos. ${listPairs(miss)}` });
+  }
+  // Un modelo marcado AFD sólo puede volverse no determinista al importarlo.
+  if(!nfa && nd.length)
+    issues.push({ lv:"err", ic:"!", html:
+      `<b>No es determinista</b>: ${nd.length} par(es) <code>(q,a)</code> con más de un destino. ` +
+      `Cambia a <b>modo AFN</b> si es lo que querías. ` +
+      listPairs(nd.map(x => [x.q, x.a])) });
+  if(!nfa && eps.length)
+    issues.push({ lv:"err", ic:"!", html:
+      `<b>Hay ${eps.length} transición(es) ε</b> y un AFD no las admite. Cambia a <b>modo AFN</b>.` });
+
+  if(nfa){
+    if(nd.length)
+      issues.push({ lv:"info", ic:"i", html:
+        `<b>${nd.length} par(es) no deterministas</b> — legítimo en un AFN: ` + listPairs(nd.map(x => [x.q, x.a])) });
+    if(eps.length)
+      issues.push({ lv:"info", ic:"i", html:
+        `<b>${eps.length} transición(es) ε</b> desde ` +
+        eps.map(e => `<code>${escHtml(nameOf(e.q))}</code>`).join(" ") + "." });
+    if(miss.length)
+      issues.push({ lv:"info", ic:"i", html:
+        `<b>δ(q,a) = ∅ en ${miss.length} par(es)</b> de <code>Q × Σ</code>: la rama muere ahí. ` +
+        `En un AFN eso <b>no</b> es un defecto. ${listPairs(miss)}` });
+    if(!nd.length && !eps.length && !miss.length && model.states.length)
+      issues.push({ lv:"info", ic:"i", html:
+        "Este AFN es de hecho <b>determinista y total</b>: puedes pasar a <b>modo AFD</b> sin perder nada." });
   }
 
   const F = model.states.filter(s => s.accepting);
   if(model.states.length && !F.length)
     issues.push({ lv:"warn", ic:"?", html:"No hay estados de aceptación: <code>F = ∅</code>, así que <code>L(M) = ∅</code>." });
 
-  // alcanzables desde q0
+  // alcanzables desde q0 (siguiendo también las ε en modo AFN)
   if(model.initial){
     const seen = new Set([model.initial]), stack = [model.initial];
     while(stack.length){
       const q = stack.pop();
-      for(const a of model.alphabet){
-        const t = model.delta[key(q, a)];
-        if(t && !seen.has(t)){ seen.add(t); stack.push(t); }
-      }
+      for(const a of transSymbols())
+        for(const t of dsts(q, a))
+          if(!seen.has(t)){ seen.add(t); stack.push(t); }
     }
     const un = model.states.filter(s => !seen.has(s.id));
     if(un.length)
@@ -1911,8 +2318,8 @@ function analyze(){
     // co-alcanzables (desde los que se llega a F)
     const rev = new Map(model.states.map(s => [s.id, []]));
     for(const k in model.delta){
-      const [from] = unkey(k); const to = model.delta[k];
-      if(rev.has(to)) rev.get(to).push(from);
+      const [from] = unkey(k);
+      for(const to of model.delta[k]) if(rev.has(to)) rev.get(to).push(from);
     }
     const co = new Set(F.map(s => s.id)), st2 = [...co];
     while(st2.length){
@@ -1930,8 +2337,9 @@ function analyze(){
   const errs  = issues.filter(i => i.lv === "err").length;
   const warns = issues.filter(i => i.lv === "warn").length;
   if(!errs && model.states.length)
-    issues.unshift({ lv:"ok", ic:"✓", html:
-      "<b>Es un DFA válido</b>: δ es una función total <code>Q × Σ → Q</code>, hay un único estado inicial y el determinismo está garantizado por construcción." });
+    issues.unshift({ lv:"ok", ic:"✓", html: nfa
+      ? "<b>Es un AFN válido</b>: <code>δ : Q × (Σ ∪ {ε}) → P(Q)</code> está bien definida y hay un único estado inicial. Una cadena se acepta si <b>alguna</b> rama termina en <code>F</code>."
+      : "<b>Es un AFD válido</b>: δ es una función total <code>Q × Σ → Q</code>, hay un único estado inicial y el determinismo está garantizado por construcción." });
   return { issues, errs, warns };
 }
 
@@ -1948,7 +2356,8 @@ function renderValidation(){
   const b = $("#valBadge");
   b.textContent = errs || warns || "0";
   b.className = "badge " + (errs ? "" : warns ? "warn" : "ok");
-  $("#btnTrap").style.display = missingPairs().length ? "" : "none";
+  $("#btnTrap").style.display = (!isNFA() && missingPairs().length) ? "" : "none";
+  $("#btnDet").style.display  = isNFA() ? "" : "none";
 }
 
 $("#btnTrap").onclick = () => {
@@ -1962,8 +2371,8 @@ $("#btnTrap").onclick = () => {
              y: ys.length ? Math.max(...ys) + 130 : 300 };
     model.states.push(trap);
   }
-  for(const [q, a] of miss) model.delta[key(q, a)] = trap.id;
-  for(const a of model.alphabet) model.delta[key(trap.id, a)] = trap.id;
+  for(const [q, a] of miss) setDsts(q, a, [trap.id]);
+  for(const a of model.alphabet) setDsts(trap.id, a, [trap.id]);
   commit();
   toast(`δ completada: ${miss.length} transición(es) redirigidas a qtrap`, "ok");
 };
@@ -1977,7 +2386,9 @@ function serializeModel(){
   const delta = {};
   for(const k in model.delta){
     const [f, a] = unkey(k);
-    (delta[f] = delta[f] || {})[a] = model.delta[k];
+    const tos = model.delta[k];
+    // En AFD se escribe el destino suelto: el archivo sigue siendo el de siempre.
+    (delta[f] = delta[f] || {})[a] = isNFA() ? tos.slice() : tos[0];
   }
   return Object.assign({}, model, { delta });
 }
@@ -1990,19 +2401,29 @@ function save(){
 function loadModel(obj){
   if(!obj || !Array.isArray(obj.states)) throw new Error("formato no reconocido");
   model = {
-    formatVersion: 1,
-    alphabet: Array.isArray(obj.alphabet) ? obj.alphabet.map(String) : [],
+    formatVersion: 2,
+    kind: obj.kind === "nfa" ? "nfa" : "dfa",
+    alphabet: Array.isArray(obj.alphabet) ? obj.alphabet.map(String).filter(a => !isEpsSym(a)) : [],
     states: obj.states.map(s => ({ id:String(s.id), name:String(s.name),
                                    x:Number(s.x)||0, y:Number(s.y)||0, accepting:!!s.accepting })),
     initial: obj.initial ? String(obj.initial) : null,
     delta: {},
-    language: typeof obj.language === "string" ? obj.language : ""
+    language: typeof obj.language === "string" ? obj.language : "",
+    regex: typeof obj.regex === "string" ? obj.regex : "",
+    regexPlus: obj.regexPlus === "closure" ? "closure" : "union"
   };
-  // Se descarta toda transición que apunte a estados o símbolos inexistentes.
+  // Se descarta toda transición que apunte a estados o símbolos inexistentes;
+  // y en modo AFD, los destinos de más y las ε (que ahí no significan nada).
   const ids = new Set(model.states.map(s => s.id));
-  const put = (f, a, t) => {
-    t = String(t);
-    if(ids.has(f) && ids.has(t) && model.alphabet.includes(a)) model.delta[key(f, a)] = t;
+  const put = (f, a, v) => {
+    if(!ids.has(f)) return;
+    const sym = isEpsSym(a) ? EPS : String(a);
+    if(sym === EPS ? model.kind !== "nfa" : !model.alphabet.includes(sym)) return;
+    const tos = (Array.isArray(v) ? v : [v]).map(String).filter(t => ids.has(t));
+    if(!tos.length) return;
+    const k = key(f, sym);
+    const all = [...(model.delta[k] || []), ...tos].filter((t, i, arr) => arr.indexOf(t) === i);
+    model.delta[k] = model.kind === "nfa" ? all : [all[0]];
   };
   const d = obj.delta || {};
   for(const k in d){
@@ -2013,8 +2434,11 @@ function loadModel(obj){
   if(model.initial && !ids.has(model.initial)) model.initial = null;
   seq = model.states.reduce((m, s) => Math.max(m, parseInt(String(s.id).replace(/\D/g,""), 10) || 0), 0);
   selectedId = null;
-  sim = { active:false, tokens:[], steps:[], idx:0, cursorState:null, status:null, errAt:-1 };
+  sim = { active:false, tokens:[], steps:[], idx:0, cursor:[], status:null, errAt:-1 };
   $("#langInput").value = model.language;
+  $("#reInput").value = model.regex;
+  $("#rePlus").value = model.regexPlus;
+  syncKindUI();
   commit();
 }
 
@@ -2118,13 +2542,15 @@ const KEY_ROUTE = {
  * Analiza el texto de una quíntupla.
  * @returns {{ok:boolean, errors:string[], warns:string[], spec:object}}
  */
-function parseQuintuple(text){
+function parseQuintuple(text, kind){
+  kind = kind || (typeof model === "object" && model.kind) || "dfa";
+  const nfa = kind === "nfa";
   const errors = [], warns = [];
   const decl = { Q:null, S:null, q0:null, F:null, L:null };
-  const trans = [];                 // { from, sym, to, ln }
+  const trans = [];                 // { from, sym, tos:[…], ln }
   const tableRows = [];             // { cells, ln }
   const symOrder = [], stateOrder = [], tableAccept = [];
-  const pushSym   = a => { if(a && !symOrder.includes(a))   symOrder.push(a); };
+  const pushSym   = a => { if(a && !isEpsSym(a) && !symOrder.includes(a)) symOrder.push(a); };
   const pushState = q => { if(q && !stateOrder.includes(q)) stateOrder.push(q); };
 
   const splitRow = l => l.split(/\s*\|\s*|\t+/).map(c => c.trim())
@@ -2146,10 +2572,11 @@ function parseQuintuple(text){
     let m = RX_DELTA_FN.exec(l) || RX_DELTA_PAIR.exec(l) || RX_DELTA_COMMA.exec(l)
          || RX_DELTA_SPACE.exec(l) || (!l.includes("=") ? RX_DELTA_BARE.exec(l) : null);
     if(m){
-      const from = cleanName(m[1]), sym = cleanName(m[2]), to = cleanName(m[3]);
-      if(from && sym && to){
-        trans.push({ from, sym, to, ln });
-        pushState(from); pushState(to); pushSym(sym);
+      const from = cleanName(m[1]), sym = cleanName(m[2]), rhs = String(m[3]).trim();
+      const tos = parseSet(rhs);            // admite «q1» y «{q1, q2}» por igual
+      if(from && sym && (tos.length || UNDEF_CELL.has(rhs.toLowerCase()))){
+        trans.push({ from, sym, tos, ln });
+        pushState(from); tos.forEach(pushState); pushSym(sym);
         return;
       }
     }
@@ -2203,17 +2630,19 @@ function parseQuintuple(text){
         if(row.cells.length - 1 > headSyms.length)
           warns.push(`Línea ${row.ln}: la fila tiene más celdas que símbolos; sobran las últimas.`);
         headSyms.forEach((sym, ci) => {
-          const cell = cleanName(row.cells[ci + 1] || "");
-          if(UNDEF_CELL.has(cell.toLowerCase())) return;
-          trans.push({ from:nm, sym, to:cell, ln:row.ln });
-          pushState(cell);
+          const cell = String(row.cells[ci + 1] || "").trim();
+          if(UNDEF_CELL.has(cleanName(cell).toLowerCase())) return;
+          const tos = parseSet(cell);
+          if(!tos.length) return;
+          trans.push({ from:nm, sym, tos, ln:row.ln });
+          tos.forEach(pushState);
         });
       }
     }
   }
 
   /* ---- Q y Σ: declarados o deducidos ---- */
-  const S = (decl.S && decl.S.length) ? decl.S.slice() : symOrder.slice();
+  let S = (decl.S && decl.S.length) ? decl.S.slice() : symOrder.slice();
   let Q = (decl.Q && decl.Q.length) ? decl.Q.slice() : stateOrder.slice();
   if(!decl.Q || !decl.Q.length){
     for(const q of [decl.q0, ...(decl.F || []), ...tableAccept]) if(q && !Q.includes(q)) Q.push(q);
@@ -2226,8 +2655,14 @@ function parseQuintuple(text){
 
   if(!Q.length) errors.push("No hay estados: declara «Q = {…}» o escribe al menos una transición.");
   if(!S.length) errors.push("Σ está vacío: declara «Σ = {…}» o escribe al menos una transición.");
-  if(S.includes("ε") || S.includes("epsilon"))
-    errors.push("Un DFA no admite ε en Σ: elimínalo del alfabeto.");
+  if(S.some(isEpsSym)){
+    if(nfa){
+      S = S.filter(x => !isEpsSym(x));
+      warns.push("ε no pertenece a Σ: lo quito del alfabeto. Las transiciones ε se declaran en δ.");
+    }else{
+      errors.push("Un DFA no admite ε en Σ: elimínalo del alfabeto.");
+    }
+  }
 
   /* ---- q0 ---- */
   let q0 = decl.q0;
@@ -2241,31 +2676,46 @@ function parseQuintuple(text){
   if(badF.length) errors.push(`F contiene estados que no están en Q: ${badF.join(", ")}.`);
 
   /* ---- transiciones ---- */
-  const seen = new Map();
+  const seen = new Map();               // (q,a) → [{to, ln}] ya aceptados
   const delta = [];
   for(const t of trans){
+    const eps = isEpsSym(t.sym);
+    const sym = eps ? EPS : t.sym;
     if(!Q.includes(t.from)) errors.push(`Línea ${t.ln}: el estado «${t.from}» no está en Q.`);
-    if(!Q.includes(t.to))   errors.push(`Línea ${t.ln}: el destino «${t.to}» no está en Q.`);
-    if(!S.includes(t.sym))  errors.push(`Línea ${t.ln}: el símbolo «${t.sym}» no está en Σ.`);
-    const k = t.from + SEP + t.sym;
-    if(seen.has(k)){
-      const prev = seen.get(k);
-      if(prev.to === t.to) warns.push(`Línea ${t.ln}: δ(${t.from}, ${t.sym}) está repetida; se ignora.`);
-      else errors.push(`No determinista: δ(${t.from}, ${t.sym}) vale «${prev.to}» (línea ${prev.ln}) y «${t.to}» (línea ${t.ln}).`);
-      continue;
+    if(eps){
+      if(!nfa) errors.push(`Línea ${t.ln}: un AFD no admite transiciones ε. Cambia a modo AFN.`);
+    }else if(!S.includes(sym)){
+      errors.push(`Línea ${t.ln}: el símbolo «${sym}» no está en Σ.`);
     }
-    seen.set(k, t);
-    delta.push([t.from, t.sym, t.to]);
+    const k = t.from + SEP + sym;
+    const prev = seen.get(k) || [];
+    for(const to of t.tos){
+      if(!Q.includes(to)){ errors.push(`Línea ${t.ln}: el destino «${to}» no está en Q.`); continue; }
+      if(prev.some(p => p.to === to)){
+        warns.push(`Línea ${t.ln}: δ(${t.from}, ${sym}) → ${to} está repetida; se ignora.`);
+        continue;
+      }
+      if(prev.length && !nfa){
+        errors.push(`No determinista: δ(${t.from}, ${sym}) vale «${prev[0].to}» (línea ${prev[0].ln}) ` +
+                    `y «${to}» (línea ${t.ln}). Cambia a modo AFN si es lo que quieres.`);
+        continue;
+      }
+      prev.push({ to, ln:t.ln });
+      delta.push([t.from, sym, to]);
+    }
+    seen.set(k, prev);
   }
 
-  const missing = Q.length * S.length - delta.length;
-  if(!errors.length && missing > 0)
+  // En un AFN δ(q,a) = ∅ es legítimo, así que sólo se avisa en modo AFD.
+  const covered = new Set(delta.filter(([, a]) => a !== EPS).map(([f, a]) => f + SEP + a)).size;
+  const missing = Q.length * S.length - covered;
+  if(!errors.length && missing > 0 && !nfa)
     warns.push(`δ es parcial: faltan ${missing} par(es) de Q × Σ. Complétala o usa un estado dummy.`);
 
   return {
     ok: errors.length === 0,
     errors, warns,
-    spec: { Q, S, q0, F, delta, language: decl.L || "" }
+    spec: { kind, Q, S, q0, F, delta, language: decl.L || "" }
   };
 }
 
@@ -2283,15 +2733,21 @@ function modelFromSpec(spec){
     };
   });
   const idOf = new Map(states.map(s => [s.name, s.id]));
+  const kind = spec.kind === "nfa" ? "nfa" : "dfa";
   const delta = {};
   for(const [f, a, t] of spec.delta){
     const fi = idOf.get(f), ti = idOf.get(t);
-    if(fi && ti) (delta[fi] = delta[fi] || {})[a] = ti;
+    if(!fi || !ti) continue;
+    const row = (delta[fi] = delta[fi] || {});
+    if(kind === "nfa") row[a] = [...(row[a] || []), ti];
+    else row[a] = ti;
   }
   return {
-    formatVersion:1, alphabet:spec.S.slice(), states,
+    formatVersion:2, kind, alphabet:spec.S.slice(), states,
     initial: idOf.get(spec.q0) || (states[0] || {}).id || null,
-    delta, language: spec.language
+    delta, language: spec.language,
+    // La quíntupla no habla de la regex propuesta: se conserva la actual.
+    regex: model.regex, regexPlus: model.regexPlus
   };
 }
 
@@ -2306,9 +2762,11 @@ function tupleFromModel(){
     out.push("L = " + model.language.trim().replace(/\s+/g, " ").replace(/^L\s*=\s*/i, ""));
   out.push("");
   for(const s of model.states)
-    for(const a of model.alphabet){
-      const t = model.delta[key(s.id, a)];
-      if(t) out.push(`δ(${s.name}, ${a}) = ${nameOf(t)}`);
+    for(const a of deltaColumns(false)){
+      const tos = dsts(s.id, a);
+      if(!tos.length) continue;
+      out.push(`δ(${s.name}, ${a}) = ` +
+               (tos.length === 1 ? nameOf(tos[0]) : "{" + tos.map(nameOf).join(", ") + "}"));
     }
   return out.join("\n");
 }
@@ -2361,7 +2819,7 @@ $("#tupleGo").onclick = async () => {
   loadModel(modelFromSpec(res.spec));
   closeTupleModal();
   fitView();
-  toast(`DFA generado: |Q| = ${res.spec.Q.length}, |Σ| = ${res.spec.S.length}`, "ok");
+  toast(`${isNFA() ? "AFN" : "AFD"} generado: |Q| = ${res.spec.Q.length}, |Σ| = ${res.spec.S.length}`, "ok");
   for(const w of res.warns.slice(0, 3)) toast(w, "warn");
 };
 
@@ -2437,29 +2895,619 @@ function fitView(){
 $("#btnFit").onclick = fitView;
 
 /* ==========================================================================
-   14. PESTAÑAS, REDIMENSIONADO Y ARRANQUE
+   13c. EXPRESIÓN REGULAR: teorema de Kleene y equivalencia con M
+
+   Esta sección es la pata «semántica» del propósito del proyecto que sí es
+   decidible. Comparar L(M) con una descripción en palabras no lo es; comparar
+   L(M) con una expresión regular, sí:
+
+       r  --Kleene/Thompson-->  AFN  --subconjuntos-->  AFD ⌉
+                                                          ├─ recorrido en
+       M  ------------------------------------------->  AFD ⌋  anchura del
+                                                              producto
+
+   El primer par de estados con aceptación distinta da el CONTRAEJEMPLO MÁS
+   CORTO, que es exactamente lo que la herramienta pide a un LLM en el prompt
+   de evaluación — sólo que aquí sale demostrado, no opinado.
+
+   Los autómatas de esta sección son «genéricos» (estados opacos, δ con ε) y
+   NO son el modelo del lienzo: así los mismos algoritmos sirven para el
+   autómata dibujado, para el de Thompson y para el de subconjuntos.
    ========================================================================== */
 
-$$(".tab").forEach(t => t.onclick = () => {
-  $$(".tab").forEach(o => o.classList.toggle("on", o === t));
-  $$(".pane").forEach(p => p.classList.toggle("on", p.id === t.dataset.pane));
+const DET_LIMIT = 4000;        // tope de subconjuntos: 2^|Q| puede dispararse
+
+function autoNew(){ return { start:null, accept:new Set(), edges:new Map(), states:[] }; }
+
+function autoAdd(A, q, sym, to){
+  if(!A.edges.has(q)) A.edges.set(q, new Map());
+  const m = A.edges.get(q);
+  if(!m.has(sym)) m.set(sym, []);
+  if(!m.get(sym).includes(to)) m.get(sym).push(to);
+}
+
+/** El autómata del lienzo, en la representación genérica. */
+function autoFromModel(){
+  const A = autoNew();
+  A.start = model.initial;
+  A.states = model.states.map(s => s.id);
+  for(const s of model.states) if(s.accepting) A.accept.add(s.id);
+  for(const k in model.delta){
+    const [q, a] = unkey(k);
+    if(!getState(q)) continue;
+    for(const t of model.delta[k]) if(getState(t)) autoAdd(A, q, a, t);
+  }
+  return A;
+}
+
+function autoClosure(A, ids){
+  const out = [], seen = new Set();
+  for(const q of ids) if(q != null && !seen.has(q)){ seen.add(q); out.push(q); }
+  for(let i = 0; i < out.length; i++){
+    const m = A.edges.get(out[i]);
+    if(!m) continue;
+    for(const t of (m.get(EPS) || [])) if(!seen.has(t)){ seen.add(t); out.push(t); }
+  }
+  return out;
+}
+
+function autoMove(A, ids, a){
+  const out = [], seen = new Set();
+  for(const q of ids){
+    const m = A.edges.get(q);
+    if(!m) continue;
+    for(const t of (m.get(a) || [])) if(!seen.has(t)){ seen.add(t); out.push(t); }
+  }
+  return out;
+}
+
+/**
+ * Construcción de subconjuntos. El AFD que sale es TOTAL: el subconjunto vacío
+ * es un estado más (el sumidero), y por eso comparar dos autómatas después es
+ * un simple recorrido en anchura sin casos especiales.
+ * @returns {{start:number, trans:Map[], accept:Set<number>, sets:string[][]}}
+ */
+function determinize(A, alphabet){
+  const idx = new Map(), sets = [], trans = [], accept = new Set();
+  let overflow = false;
+  const intern = list => {
+    const sorted = [...list].sort();
+    const k = sorted.join(SEP);                 // SEP no aparece en ningún id
+    if(idx.has(k)) return idx.get(k);
+    const i = sets.length;
+    idx.set(k, i); sets.push(sorted); trans.push(new Map());
+    if(sorted.some(q => A.accept.has(q))) accept.add(i);
+    return i;
+  };
+  const start = intern(A.start ? autoClosure(A, [A.start]) : []);
+  for(let i = 0; i < sets.length; i++){
+    if(sets.length > DET_LIMIT){ overflow = true; break; }
+    for(const a of alphabet)
+      trans[i].set(a, intern(autoClosure(A, autoMove(A, sets[i], a))));
+  }
+  return { start, trans, accept, sets, alphabet:alphabet.slice(), overflow };
+}
+
+/**
+ * Recorre en anchura los pares (estado de X, estado de Y) desde los dos
+ * iniciales. El primer par en el que uno acepta y el otro no da la cadena más
+ * corta que separa los dos lenguajes; si no aparece ninguno, son iguales.
+ */
+function dfaDiff(X, Y, alphabet){
+  const back = new Map();                       // "i,j" → { key, sym }
+  const k0 = X.start + "," + Y.start;
+  back.set(k0, null);
+  let level = [[X.start, Y.start]];
+  const wordOf = k => {
+    const out = [];
+    for(let cur = k; ; ){
+      const p = back.get(cur);
+      if(!p) break;
+      out.unshift(p.sym); cur = p.key;
+    }
+    return out;
+  };
+  while(level.length){
+    const next = [];
+    for(const [i, j] of level){
+      const k = i + "," + j;
+      const inX = X.accept.has(i), inY = Y.accept.has(j);
+      if(inX !== inY) return { equal:false, word:wordOf(k), inX, inY };
+      for(const a of alphabet){
+        const i2 = X.trans[i].get(a), j2 = Y.trans[j].get(a);
+        if(i2 === undefined || j2 === undefined) continue;
+        const k2 = i2 + "," + j2;
+        if(back.has(k2)) continue;
+        back.set(k2, { key:k, sym:a });
+        next.push([i2, j2]);
+      }
+    }
+    level = next;
+  }
+  return { equal:true };
+}
+
+/** Las `n` cadenas más cortas que acepta el AFD (orden militar), como muestra. */
+function dfaSamples(D, alphabet, n, maxLen){
+  const out = [];
+  let level = [{ i:D.start, w:[] }];
+  for(let len = 0; len <= maxLen && level.length; len++){
+    const next = [];
+    for(const nd of level){
+      if(D.accept.has(nd.i)){ out.push(nd.w); if(out.length >= n) return out; }
+      if(len < maxLen)
+        for(const a of alphabet){
+          const j = D.trans[nd.i].get(a);
+          if(j !== undefined) next.push({ i:j, w:[...nd.w, a] });
+        }
+    }
+    if(next.length > 20000) break;              // corta la explosión combinatoria
+    level = next;
+  }
+  return out;
+}
+
+/* --- sintaxis de la expresión regular ------------------------------------ */
+
+const RE_EPS_LIT   = ["ε", "λ", "\\varepsilon", "\\epsilon", "\\lambda"];
+const RE_EMPTY_LIT = ["∅", "\\emptyset", "\\varnothing"];
+const RE_OP_NAME   = { star:"*", plus:"+", opt:"?" };
+
+/**
+ * Trocea la expresión.
+ *
+ * `plusIsUnion` decide qué significa «+», porque en los apuntes conviven los
+ * dos usos (unión al estilo Hopcroft y clausura positiva) y adivinarlo por
+ * contexto sería un acierto silencioso a veces y un error silencioso otras.
+ * Para un símbolo de Σ que choque con un operador está el entrecomillado.
+ */
+function reTokenize(src, alphabet, plusIsUnion){
+  const errors = [], toks = [], extra = [];
+  const syms = alphabet.filter(Boolean).slice().sort((x, y) => y.length - x.length);
+  const s = String(src);
+  let i = 0;
+  const lit = arr => arr.find(x => s.startsWith(x, i));
+  while(i < s.length){
+    const c = s[i];
+    if(/\s/.test(c)){ i++; continue; }
+    if(c === "'" || c === '"'){
+      const j = s.indexOf(c, i + 1);
+      if(j < 0){ errors.push(`Falta cerrar la comilla abierta en la posición ${i+1}.`); break; }
+      const v = s.slice(i + 1, j);
+      if(!v) errors.push(`Comillas vacías en la posición ${i+1}: para la cadena vacía escribe ε.`);
+      else { toks.push({ t:"sym", v }); if(!alphabet.includes(v)) extra.push(v); }
+      i = j + 1; continue;
+    }
+    if(c === "("){ toks.push({ t:"(" }); i++; continue; }
+    if(c === ")"){ toks.push({ t:")" }); i++; continue; }
+    if(c === "|" || c === "∪" || (c === "+" && plusIsUnion)){ toks.push({ t:"|" }); i++; continue; }
+    if(c === "*"){ toks.push({ t:"star" }); i++; continue; }
+    if(c === "⁺" || c === "+"){ toks.push({ t:"plus" }); i++; continue; }
+    if(c === "?"){ toks.push({ t:"opt" }); i++; continue; }
+    if(c === "·" || c === "∘"){ toks.push({ t:"cat" }); i++; continue; }
+    const m = syms.find(sym => s.startsWith(sym, i));
+    if(m){ toks.push({ t:"sym", v:m }); i += m.length; continue; }
+    let L = lit(RE_EPS_LIT);
+    if(L){ toks.push({ t:"eps" }); i += L.length; continue; }
+    L = lit(RE_EMPTY_LIT);
+    if(L){ toks.push({ t:"empty" }); i += L.length; continue; }
+    if(/[A-Za-z0-9_#@$]/.test(c)){ toks.push({ t:"sym", v:c }); extra.push(c); i++; continue; }
+    errors.push(`No sé qué es «${c}» (posición ${i+1}).`);
+    i++;
+  }
+  return { toks, errors, extra:[...new Set(extra)] };
+}
+
+/**
+ * Descenso recursivo con la precedencia de siempre:
+ *     unión  <  concatenación  <  {* ⁺ ?}
+ * Como `parseQuintuple`, devuelve errores en vez de lanzarlos: la expresión la
+ * escribe una persona mientras teclea, y a medio escribir casi nunca es válida.
+ */
+function reParse(src, alphabet, plusIsUnion){
+  const { toks, errors, extra } = reTokenize(src, alphabet, plusIsUnion);
+  let p = 0;
+  const peek = () => toks[p];
+
+  function pAtom(){
+    const t = peek();
+    if(!t){ errors.push("La expresión se acaba antes de tiempo: falta un operando."); return { t:"eps" }; }
+    if(t.t === "("){
+      p++;
+      const n = pUnion();
+      if(peek() && peek().t === ")") p++;
+      else errors.push("Falta cerrar un paréntesis «)».");
+      return n;
+    }
+    if(t.t === "sym"){ p++; return { t:"sym", v:t.v }; }
+    if(t.t === "eps"){ p++; return { t:"eps" }; }
+    if(t.t === "empty"){ p++; return { t:"empty" }; }
+    if(RE_OP_NAME[t.t]){
+      errors.push(`«${RE_OP_NAME[t.t]}» necesita una expresión a su izquierda.`);
+      p++; return { t:"eps" };
+    }
+    errors.push("Paréntesis «)» sin abrir.");
+    p++; return { t:"eps" };
+  }
+
+  function pPost(){
+    let n = pAtom();
+    for(;;){
+      const t = peek();
+      if(!t) break;
+      if(t.t === "star")      { p++; n = { t:"star", a:n }; }
+      else if(t.t === "plus") { p++; n = { t:"plus", a:n }; }
+      else if(t.t === "opt")  { p++; n = { t:"opt",  a:n }; }
+      else break;
+    }
+    return n;
+  }
+
+  function pConcat(){
+    let n = null;
+    while(peek() && peek().t !== "|" && peek().t !== ")"){
+      if(peek().t === "cat"){
+        p++;
+        if(!n) errors.push("«·» no tiene nada a su izquierda.");
+        continue;
+      }
+      const before = p;
+      const f = pPost();
+      n = n ? { t:"cat", a:n, b:f } : f;
+      if(p === before) p++;                     // salvavidas: jamás un bucle infinito
+    }
+    if(!n){ errors.push("Falta un operando: ¿un «|» sin nada a un lado, o unos «()» vacíos?"); return { t:"eps" }; }
+    return n;
+  }
+
+  function pUnion(){
+    let n = pConcat();
+    while(peek() && peek().t === "|"){ p++; n = { t:"alt", a:n, b:pConcat() }; }
+    return n;
+  }
+
+  if(!toks.length) return { ok:false, empty:true, errors:errors.length ? errors : ["Escribe una expresión regular."], extra, ast:null };
+  const ast = pUnion();
+  if(p < toks.length) errors.push("Sobra texto al final de la expresión (¿un «)» de más?).");
+  return { ok:errors.length === 0, errors, extra, ast };
+}
+
+/**
+ * Teorema de Kleene, construcción de Thompson: cada operador se traduce a un
+ * fragmento con UN inicio y UN final, y los fragmentos se cosen con ε.
+ *
+ *   a        ─a→                     A|B     ε a los dos, ε desde los dos
+ *   AB       final de A ─ε→ inicio de B
+ *   A*       inicio ─ε→ final, final de A ─ε→ inicio de A
+ *   A+       final de A ─ε→ inicio de A          (A A*, sin duplicar el fragmento)
+ *   A?       inicio de A ─ε→ final de A
+ *
+ * El resultado tiene muchos estados y muchas ε: es a propósito, así se ve la
+ * construcción. Para trabajar con él, determinízalo.
+ */
+function thompson(ast){
+  const A = autoNew();
+  let n = 0;
+  const st = () => { const q = "t" + (n++); A.states.push(q); return q; };
+  const build = node => {
+    switch(node.t){
+      case "sym":   { const s = st(), f = st(); autoAdd(A, s, node.v, f); return { s, f }; }
+      case "eps":   { const s = st(), f = st(); autoAdd(A, s, EPS, f);    return { s, f }; }
+      case "empty": { const s = st(), f = st();                          return { s, f }; }
+      case "cat":   { const x = build(node.a), y = build(node.b);
+                      autoAdd(A, x.f, EPS, y.s); return { s:x.s, f:y.f }; }
+      case "alt":   { const x = build(node.a), y = build(node.b), s = st(), f = st();
+                      autoAdd(A, s, EPS, x.s); autoAdd(A, s, EPS, y.s);
+                      autoAdd(A, x.f, EPS, f); autoAdd(A, y.f, EPS, f); return { s, f }; }
+      case "star":  { const x = build(node.a), s = st(), f = st();
+                      autoAdd(A, s, EPS, x.s); autoAdd(A, s, EPS, f);
+                      autoAdd(A, x.f, EPS, x.s); autoAdd(A, x.f, EPS, f); return { s, f }; }
+      case "plus":  { const x = build(node.a); autoAdd(A, x.f, EPS, x.s); return { s:x.s, f:x.f }; }
+      case "opt":   { const x = build(node.a); autoAdd(A, x.s, EPS, x.f); return { s:x.s, f:x.f }; }
+    }
+    throw new Error("nodo de expresión desconocido: " + node.t);
+  };
+  const r = build(ast);
+  A.start = r.s;
+  A.accept = new Set([r.f]);
+  return A;
+}
+
+/* --- comparación L(M) ≟ L(r) --------------------------------------------- */
+
+/** Σ para la comparación: el del autómata más lo que la expresión traiga de fuera. */
+function compareAlphabet(extra){
+  return [...model.alphabet, ...(extra || []).filter(x => !model.alphabet.includes(x))];
+}
+
+const wordText = w => w.length ? w.join("") : "ε";
+
+/**
+ * Veredicto completo de la expresión escrita frente al autómata del lienzo.
+ * Estados: empty · error · nomodel · ok · diff.
+ */
+function regexReport(){
+  // «r = (a|b)*ab» es como se escribe en los apuntes: se admite el prefijo.
+  const src = String(model.regex || "").trim().replace(/^r\s*=\s*/i, "");
+  if(!src) return { state:"empty" };
+  const pr = reParse(src, model.alphabet, model.regexPlus !== "closure");
+  if(!pr.ok) return { state:"error", errors:pr.errors };
+  if(!model.states.length) return { state:"nomodel", errors:["Todavía no hay ningún autómata que comparar."] };
+  if(!model.initial)       return { state:"nomodel", errors:["El autómata no tiene estado inicial."] };
+
+  const alphabet = compareAlphabet(pr.extra);
+  const M  = determinize(autoFromModel(), alphabet);
+  const Rg = determinize(thompson(pr.ast), alphabet);
+  if(M.overflow || Rg.overflow)
+    return { state:"error", errors:["Demasiados subconjuntos: el autómata es muy grande para compararlo aquí."] };
+
+  const warns = [];
+  if(pr.extra.length)
+    warns.push(`La expresión usa símbolos que no están en Σ: ${pr.extra.join(", ")}.`);
+
+  const d = dfaDiff(M, Rg, alphabet);
+  if(d.equal)
+    return { state:"ok", warns, alphabet, samples:dfaSamples(M, alphabet, 8, 8),
+             states:{ m:M.sets.length, r:Rg.sets.length } };
+  return { state:"diff", warns, alphabet, word:d.word, inM:d.inX, inR:d.inY,
+           samplesM:dfaSamples(M, alphabet, 6, 8), samplesR:dfaSamples(Rg, alphabet, 6, 8) };
+}
+
+let lastRegexWord = null;      // contraejemplo vigente, para el botón del simulador
+
+function renderRegex(){
+  const V = $("#reVerdict"), D = $("#reDetail"), B = $("#reBadge"), W = $("#btnReWord");
+  if(!V || !D) return;
+  const r = regexReport();
+  lastRegexWord = r.state === "diff" ? r.word : null;
+  if(W) W.style.display = lastRegexWord ? "" : "none";
+
+  const badge = (txt, cls) => { if(B){ B.textContent = txt; B.className = "badge " + cls; } };
+  const listOf = ws => ws.length
+    ? ws.map(w => `<code>${escHtml(wordText(w))}</code>`).join(" ")
+    : "<i>ninguna: el lenguaje es ∅</i>";
+  const warnHtml = (r.warns || []).length
+    ? `<div class="blk">${r.warns.map(w => "⚠ " + escHtml(w)).join("<br>")}</div>` : "";
+
+  if(r.state === "empty"){
+    badge("·", "na");
+    V.innerHTML = '<span class="verdict err" style="background:none;border-color:var(--line);color:var(--fg2)">sin expresión</span>';
+    D.innerHTML = 'Escribe arriba una expresión regular y te digo si describe <b>exactamente</b> el lenguaje del autómata del lienzo. '
+                + 'Si no coincide, te doy la <b>cadena más corta</b> que las separa.';
+    return;
+  }
+  if(r.state === "error" || r.state === "nomodel"){
+    badge("!", "warn");
+    V.innerHTML = `<span class="verdict err">${r.state === "error" ? "Expresión no válida" : "Falta el autómata"}</span>`;
+    D.innerHTML = '<div class="blk">' + r.errors.map(e => "• " + escHtml(e)).join("<br>") + "</div>";
+    return;
+  }
+  if(r.state === "ok"){
+    badge("✓", "ok");
+    V.innerHTML = '<span class="verdict acc">✓ L(M) = L(r)</span>'
+                + `<span style="color:var(--fg2)">comprobado sobre Σ = {${escHtml(r.alphabet.join(", "))}}</span>`;
+    D.innerHTML = `Los dos lenguajes coinciden en <b>todas</b> las cadenas, no sólo en las probadas: `
+                + `se ha recorrido el producto completo de los dos AFD alcanzables (${r.states.m} × ${r.states.r} subconjuntos).`
+                + `<div class="blk">Cadenas más cortas que acepta: <span class="lst">${listOf(r.samples)}</span></div>`
+                + warnHtml;
+    return;
+  }
+  // r.state === "diff"
+  badge("✗", "");
+  const w = `<span class="w">«${escHtml(wordText(r.word))}»</span>`;
+  V.innerHTML = '<span class="verdict rej">✗ L(M) ≠ L(r)</span>'
+              + `<span>contraejemplo más corto: ${w}</span>`;
+  D.innerHTML =
+    (r.inM
+      ? `<b>Falso positivo</b>: el autómata acepta ${w} pero la expresión no la genera. `
+        + `<code>w ∈ L(M)</code>, <code>w ∉ L(r)</code>.`
+      : `<b>Falso negativo</b>: la expresión genera ${w} pero el autómata la rechaza. `
+        + `<code>w ∈ L(r)</code>, <code>w ∉ L(M)</code>.`)
+    + `<div class="blk">Acepta el autómata: <span class="lst">${listOf(r.samplesM)}</span><br>`
+    + `Genera la expresión: <span class="lst">${listOf(r.samplesR)}</span></div>`
+    + warnHtml;
+}
+
+$("#reInput").addEventListener("input", () => {
+  model.regex = $("#reInput").value;
+  renderRegex(); save();
 });
+$("#rePlus").addEventListener("change", () => {
+  model.regexPlus = $("#rePlus").value;
+  renderRegex(); save();
+});
+
+$("#btnReWord").onclick = () => {
+  if(!lastRegexWord) return;
+  $("#simInput").value = lastRegexWord.join("");
+  $$(".tab[data-pane]").forEach(t => t.classList.toggle("on", t.dataset.pane === "pSim"));
+  $$(".pane").forEach(p => p.classList.toggle("on", p.id === "pSim"));
+  sim.idx = 0; runSimulation(true);
+  toast(`Contraejemplo «${wordText(lastRegexWord)}» cargado en el simulador`, "ok");
+};
+
+/* --- de la expresión al lienzo, y del AFN al AFD ------------------------- */
+
+/**
+ * Convierte un autómata genérico en modelo dibujable, colocando los estados en
+ * capas por distancia al inicial (los de Thompson son cadenas largas: en
+ * círculo quedarían ilegibles).
+ */
+function modelFromAuto(A, alphabet, nameOfState){
+  const level = new Map();
+  if(A.start != null){
+    level.set(A.start, 0);
+    const queue = [A.start];
+    while(queue.length){
+      const q = queue.shift();
+      const m = A.edges.get(q);
+      if(!m) continue;
+      for(const tos of m.values())
+        for(const t of tos) if(!level.has(t)){ level.set(t, level.get(q) + 1); queue.push(t); }
+    }
+  }
+  const ids = A.states.slice();
+  for(const q of ids) if(!level.has(q)) level.set(q, 0);
+
+  const byLevel = new Map();
+  for(const q of ids){
+    const L = level.get(q);
+    if(!byLevel.has(L)) byLevel.set(L, []);
+    byLevel.get(L).push(q);
+  }
+  // Orden de lectura: por capas y, dentro de cada capa, de arriba abajo.
+  const ordered = [...byLevel.keys()].sort((a, b) => a - b)
+                    .reduce((acc, L) => acc.concat(byLevel.get(L)), []);
+
+  const DX = 215, DY = 170;
+  const states = [], idOf = new Map();
+  ordered.forEach((q, i) => {
+    const L = level.get(q), col = byLevel.get(L), row = col.indexOf(q);
+    const id = "s" + (i + 1);
+    idOf.set(q, id);
+    states.push({
+      id, name: nameOfState ? nameOfState(q, i) : "q" + i,
+      x: L * DX,
+      y: Math.round((row - (col.length - 1) / 2) * DY),
+      accepting: A.accept.has(q)
+    });
+  });
+
+  const delta = {};
+  for(const [q, m] of A.edges)
+    for(const [sym, tos] of m)
+      for(const t of tos){
+        const f = idOf.get(q), g = idOf.get(t);
+        if(!f || !g) continue;
+        const row = (delta[f] = delta[f] || {});
+        row[sym] = [...(row[sym] || []), g];
+      }
+
+  return { formatVersion:2, kind:"nfa", alphabet:alphabet.slice(), states,
+           initial: idOf.get(A.start) || null, delta,
+           language: model.language, regex: model.regex, regexPlus: model.regexPlus };
+}
+
+/** Dibuja en el lienzo el AFN de Thompson de la expresión escrita. */
+async function regexToNfa(){
+  const src = String(model.regex || "").trim().replace(/^r\s*=\s*/i, "");
+  if(!src){ toast("Escribe primero una expresión regular", "warn"); return; }
+  const pr = reParse(src, model.alphabet, model.regexPlus !== "closure");
+  if(!pr.ok){ toast("La expresión no es válida: " + pr.errors[0], "err"); return; }
+  if(model.states.length && !await confirmBox(
+      "Se reemplazará el autómata del lienzo por el AFN que el algoritmo de Kleene\n" +
+      "construye para la expresión. ¿Continuar?")) return;
+  const A = thompson(pr.ast);
+  loadModel(modelFromAuto(A, compareAlphabet(pr.extra)));
+  fitView();
+  toast(`AFN de Kleene construido: |Q| = ${model.states.length}, y por construcción L(M) = L(r)`, "ok");
+}
+
+/** Construcción de subconjuntos aplicada al autómata del lienzo. */
+function determinizeModel(){
+  if(!model.initial){ toast("Marca un estado inicial antes de determinizar", "err"); return; }
+  const alphabet = model.alphabet.slice();
+  const D = determinize(autoFromModel(), alphabet);
+  if(D.overflow){ toast("Demasiados subconjuntos: no se puede determinizar aquí", "err"); return; }
+
+  const A = autoNew();
+  const label = new Map();
+  D.sets.forEach((set, i) => {
+    const q = "d" + i;
+    A.states.push(q);
+    label.set(q, set.length ? "{" + sortStates(set).map(nameOf).join(",") + "}" : "∅");
+    if(D.accept.has(i)) A.accept.add(q);
+  });
+  A.start = "d" + D.start;
+  D.trans.forEach((m, i) => { for(const [a, j] of m) autoAdd(A, "d" + i, a, "d" + j); });
+
+  const next = modelFromAuto(A, alphabet, q => label.get(q));
+  next.kind = "dfa";                       // ya es determinista y total por construcción
+  loadModel(next);
+  fitView();
+  toast(`AFD por subconjuntos: |Q| = ${model.states.length}`, "ok");
+}
+
+$("#btnReKleene").onclick = regexToNfa;
+$("#btnDet").onclick = async () => {
+  if(model.states.length && !await confirmBox(
+      "Se reemplazará el AFN del lienzo por el AFD equivalente\n(construcción de subconjuntos). ¿Continuar?")) return;
+  determinizeModel();
+};
+
+/* ==========================================================================
+   14. PESTAÑAS, TAMAÑO DEL PANEL Y ARRANQUE
+   ========================================================================== */
+
+$$(".tab[data-pane]").forEach(t => t.onclick = () => {
+  $$(".tab[data-pane]").forEach(o => o.classList.toggle("on", o === t));
+  $$(".pane").forEach(p => p.classList.toggle("on", p.id === t.dataset.pane));
+  if(ui.folded) setFold(false);            // pedir una pestaña despliega el panel
+});
+
+/**
+ * Tamaño del panel inferior. Tres mandos, porque el diagrama y el panel se
+ * disputan la misma pantalla y en clase interesa una cosa u otra según el rato:
+ *   · arrastrar la barra gris (o los botones ▁ / ▾) para el alto,
+ *   · «Aa» para la tipografía compacta,
+ *   · doble clic en la barra gris para plegar y desplegar.
+ * Las tres se recuerdan entre sesiones, aparte del autómata.
+ */
+const UI_KEY = "dfa-editor-ui";
+const PANEL_MIN = 56, PANEL_DEFAULT = 410, PANEL_STEP = 70;
+let ui = { panelH:PANEL_DEFAULT, folded:false, compact:false };
+
+function saveUi(){ try{ localStorage.setItem(UI_KEY, JSON.stringify(ui)); }catch(e){ /* ignorar */ } }
+
+function applyUi(){
+  const p = $("#panel");
+  if(!p) return;
+  p.classList.toggle("folded", ui.folded);
+  p.classList.toggle("compact", ui.compact);
+  p.style.height = ui.folded ? "" : ui.panelH + "px";
+  const f = $("#panelFold");
+  if(f){ f.textContent = ui.folded ? "▴" : "▾"; f.title = (ui.folded ? "Desplegar" : "Plegar") + " el panel del todo"; }
+  const sm = $("#panelSmaller");
+  if(sm) sm.title = ui.folded ? "El panel ya está plegado" : `Achicar el panel (ahora ${Math.round(ui.panelH)} px)`;
+  const c = $("#panelCompact");
+  if(c) c.classList.toggle("on", ui.compact);
+  resetViewToSize();
+}
+function setPanelHeight(h){
+  ui.folded = false;
+  ui.panelH = Math.round(Math.min(innerHeight - 160, Math.max(PANEL_MIN, h)));
+  applyUi(); saveUi();
+}
+function setFold(v){ ui.folded = v; applyUi(); saveUi(); }
+
+const panelHeightNow = () => ui.folded ? PANEL_MIN : ui.panelH;
+
+$("#panelFold").onclick    = () => setFold(!ui.folded);
+$("#panelSmaller").onclick = () => setPanelHeight(panelHeightNow() - PANEL_STEP);
+$("#panelBigger").onclick  = () => setPanelHeight(panelHeightNow() + PANEL_STEP);
+$("#panelCompact").onclick = () => { ui.compact = !ui.compact; applyUi(); saveUi();
+                                     toast(ui.compact ? "Panel compacto" : "Panel a tamaño normal", "ok"); };
 
 (function grip(){
   let dragging = false, startY = 0, startH = 0;
+  $("#grip").title = "Arrastra para cambiar el alto del panel · doble clic para plegarlo";
   $("#grip").addEventListener("mousedown", e => {
     dragging = true; startY = e.clientY; startH = $("#panel").getBoundingClientRect().height;
     document.body.style.userSelect = "none"; e.preventDefault();
   });
+  $("#grip").addEventListener("dblclick", () => setFold(!ui.folded));
   window.addEventListener("mousemove", e => {
     if(!dragging) return;
-    const h = Math.min(innerHeight - 200, Math.max(90, startH - (e.clientY - startY)));
-    $("#panel").style.height = h + "px";
+    ui.folded = false;
+    ui.panelH = Math.min(innerHeight - 160, Math.max(PANEL_MIN, startH - (e.clientY - startY)));
+    $("#panel").classList.remove("folded");
+    $("#panel").style.height = ui.panelH + "px";
     resetViewToSize();
   });
   window.addEventListener("mouseup", () => {
     if(!dragging) return;
     dragging = false; document.body.style.userSelect = "";
+    applyUi(); saveUi();
   });
 })();
 
@@ -2476,16 +3524,43 @@ const EXAMPLE = {
   delta:{ s1:{ a:"s2", b:"s1" }, s2:{ a:"s1", b:"s2" } },
   language:"L = { w ∈ {a,b}* : w contiene un número par de a }"
 };
+/**
+ * Ejemplo de AFN: «w termina en ab». Es el caso de libro en el que el no
+ * determinismo se ve de un vistazo — δ(q0,a) = {q0,q1} adivina dónde empieza
+ * el sufijo — y viene con su expresión regular ya escrita para que la pestaña
+ * Regex diga que sí desde el primer momento.
+ */
+const EXAMPLE_NFA = {
+  formatVersion:2, kind:"nfa",
+  alphabet:["a","b"],
+  states:[
+    { id:"s1", name:"q0", x:-240, y:0, accepting:false },
+    { id:"s2", name:"q1", x:60,   y:0, accepting:false },
+    { id:"s3", name:"q2", x:360,  y:0, accepting:true  }
+  ],
+  initial:"s1",
+  delta:{ s1:{ a:["s1","s2"], b:["s1"] }, s2:{ b:["s3"] } },
+  language:"L = { w ∈ {a,b}* : w termina en ab }",
+  regex:"(a|b)*ab", regexPlus:"union"
+};
+
 $("#btnExample").onclick = async () => {
   if(model.states.length && !await confirmBox("Se reemplazará el autómata actual por el ejemplo. ¿Continuar?")) return;
-  loadModel(JSON.parse(JSON.stringify(EXAMPLE)));
-  $("#batchInput").value = "bb\na\naba\nabba";
+  const nfa = isNFA();
+  loadModel(JSON.parse(JSON.stringify(nfa ? EXAMPLE_NFA : EXAMPLE)));
+  $("#batchInput").value = nfa ? "ab\naab\nbab\naba\nb" : "bb\na\naba\nabba";
   fitView();
-  toast("Ejemplo cargado: paridad de «a»", "ok");
+  toast(nfa ? "Ejemplo AFN cargado: cadenas que terminan en «ab»"
+            : "Ejemplo cargado: paridad de «a»", "ok");
 };
 
 (function boot(){
   setMode("select");
+  try{
+    const rawUi = localStorage.getItem(UI_KEY);
+    if(rawUi) ui = Object.assign(ui, JSON.parse(rawUi) || {});
+  }catch(e){ /* ignorar */ }
+  applyUi();
   const r = svg.getBoundingClientRect();
   view = { x:-r.width/2, y:-r.height/2, w:r.width || 1000, h:r.height || 640 };
   let restored = false;
@@ -2493,7 +3568,13 @@ $("#btnExample").onclick = async () => {
     const raw = localStorage.getItem(STORE_KEY);
     if(raw){ loadModel(JSON.parse(raw)); restored = true; }
   }catch(e){ /* ignorar */ }
-  if(!restored){ $("#langInput").value = model.language; commit(); }
+  if(!restored){
+    $("#langInput").value = model.language;
+    $("#reInput").value = model.regex;
+    $("#rePlus").value = model.regexPlus;
+    syncKindUI();
+    commit();
+  }
   applyView();
   if(model.states.length) fitView();
 })();

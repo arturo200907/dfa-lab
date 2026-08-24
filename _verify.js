@@ -104,7 +104,7 @@ console.log("\n=== 3. δ total y validación ===");
 eq("sin pares faltantes", run("missingPairs().length"), 0);
 eq("0 errores de validación", run("analyze().errs"), 0);
 eq("0 avisos", run("analyze().warns"), 0);
-check("mensaje «Es un DFA válido»", run("analyze().issues[0].html").includes("DFA válido"));
+check("mensaje «Es un AFD válido»", run("analyze().issues[0].html").includes("AFD válido"));
 
 console.log("\n=== 4. Simulador (L = nº par de «a») ===");
 const sim = s => run(`(()=>{const t=tokenize(${JSON.stringify(s)});return t.badAt>=0?'badsym':runTokens(t.tokens).status;})()`);
@@ -119,7 +119,7 @@ eq("aaa    → rechaza (3 a)", sim("aaa"), "reject");
 eq("babab  → acepta  (2 a)", sim("babab"), "accept");
 eq("bbabb  → rechaza (1 a)", sim("bbabb"), "reject");
 eq("c      → símbolo fuera de Σ", sim("c"), "badsym");
-eq("traza de abba", run("runTokens(tokenize('abba').tokens).steps.map(s=>nameOf(s.from)+'-'+s.sym+'->'+nameOf(s.to))"),
+eq("traza de abba", run("runTokens(tokenize('abba').tokens).steps.map(s=>setLabel(s.from)+'-'+s.sym+'->'+setLabel(s.to))"),
    ["q0-a->q1","q1-b->q1","q1-b->q1","q1-a->q0"]);
 
 console.log("\n=== 5. Tokenización de símbolos multicarácter ===");
@@ -130,7 +130,7 @@ run("loadModel(JSON.parse(JSON.stringify(EXAMPLE)))");
 
 console.log("\n=== 6. Determinismo por construcción (reasignación) ===");
 run("(()=>{const q0=model.states[0].id,q1=model.states[1].id;setDelta(q0,'b',q1);})()");
-eq("δ(q0,b) ahora = q1", run("nameOf(model.delta[key(model.states[0].id,'b')])"), "q1");
+eq("δ(q0,b) ahora = q1", run("nameOf(dst(model.states[0].id,'b'))"), "q1");
 eq("el bucle q0→q0 desapareció", run("deriveEdges().filter(e=>e.from===e.to&&nameOf(e.from)=='q0').length"), 0);
 eq("sigue habiendo un único destino para (q0,b)",
    run("Object.keys(model.delta).filter(k=>unkey(k)[0]===model.states[0].id&&unkey(k)[1]==='b').length"), 1);
@@ -177,7 +177,7 @@ run("$('#btnTrap').onclick()");
 eq("δ vuelve a ser total", run("missingPairs().length"), 0);
 eq("se creó qtrap", run("model.states.some(s=>s.name==='qtrap')"), true);
 eq("qtrap absorbe (bucle en todo Σ)",
-   run("(()=>{const t=model.states.find(s=>s.name==='qtrap').id;return model.alphabet.every(a=>model.delta[key(t,a)]===t);})()"), true);
+   run("(()=>{const t=model.states.find(s=>s.name==='qtrap').id;return model.alphabet.every(a=>dst(t,a)===t);})()"), true);
 check("qtrap se reporta como estado muerto", run("analyze().issues.map(i=>i.html).join()").includes("muerto"));
 eq("0 errores tras completar", run("analyze().errs"), 0);
 run("loadModel(JSON.parse(JSON.stringify(EXAMPLE)))");
@@ -256,7 +256,7 @@ run("dropPalette('trap', 400, 300)");
 eq("el dummy se llama qtrap", run("model.states[model.states.length-1].name"), "qtrap");
 eq("el dummy nunca acepta", run("model.states[model.states.length-1].accepting"), false);
 eq("el dummy es absorbente en todo Σ",
-   run("(()=>{const t=model.states[model.states.length-1].id;return model.alphabet.every(a=>model.delta[key(t,a)]===t);})()"), true);
+   run("(()=>{const t=model.states[model.states.length-1].id;return model.alphabet.every(a=>dst(t,a)===t);})()"), true);
 // Recién soltado nadie apunta al dummy: la validación debe verlo inalcanzable.
 check("el dummy recién soltado se reporta inalcanzable",
       run("analyze().issues.map(i=>i.html).join()").includes("inalcanzable"));
@@ -396,6 +396,207 @@ eq("ida y vuelta: mismo |δ|",
    run("parseQuintuple(tupleFromModel()).spec.delta.length"), 6);
 eq("ida y vuelta: mismo Q", run("parseQuintuple(tupleFromModel()).spec.Q"),
    run("model.states.map(s=>s.name)"));
+
+console.log("\n=== 21. δ como conjunto de destinos · modo AFN ===");
+run("loadModel(JSON.parse(JSON.stringify(EXAMPLE_NFA)))");
+eq("el ejemplo se carga en modo AFN", run("model.kind"), "nfa");
+eq("δ(q0,a) = {q0,q1}", run("dsts(model.states[0].id,'a').map(nameOf)"), ["q0","q1"]);
+eq("δ(q1,a) = ∅", run("dsts(model.states[1].id,'a')"), []);
+eq("1 par no determinista", run("nondetPairs().length"), 1);
+eq("ninguna transición ε todavía", run("epsTransitions().length"), 0);
+eq("Σ ∪ {ε} etiqueta las transiciones en AFN", run("transSymbols()"), ["a","b","ε"]);
+eq("sin transiciones ε, la columna ε no se muestra", run("deltaColumns(false)"), ["a","b"]);
+eq("…pero sí al editar la tabla (es donde se crean)", run("deltaColumns(true)"), ["a","b","ε"]);
+run("addDelta(model.states[1].id, EPS, model.states[2].id)");
+eq("en cuanto hay una ε, la columna aparece sola", run("deltaColumns(false)"), ["a","b","ε"]);
+check("y el LaTeX la incluye", run("buildTexArray()").includes("varepsilon"));
+run("loadModel(JSON.parse(JSON.stringify(EXAMPLE_NFA)))");
+eq("la celda muestra el conjunto", run("cellText(dsts(model.states[0].id,'a'))"), "{q0, q1}");
+eq("la celda vacía es ∅ en AFN", run("cellText([])"), "∅");
+eq("3 aristas derivadas (q0→q0, q0→q1, q1→q2)", run("deriveEdges().length"), 3);
+run("setDsts(model.states[0].id,'b',[model.states[1].id,model.states[1].id,model.states[0].id])");
+eq("setDsts quita repetidos y ordena como Q", run("dsts(model.states[0].id,'b').map(nameOf)"), ["q0","q1"]);
+run("setDsts(model.states[0].id,'b',['FANTASMA'])");
+eq("setDsts descarta destinos inexistentes ⇒ borra la clave",
+   run("(key(model.states[0].id,'b') in model.delta)"), false);
+check("δ nunca guarda arrays vacíos",
+   run("Object.keys(model.delta).every(k=>Array.isArray(model.delta[k])&&model.delta[k].length>0)"));
+run("loadModel(JSON.parse(JSON.stringify(EXAMPLE_NFA))); toggleDelta(model.states[0].id,'b',model.states[1].id)");
+eq("toggleDelta acumula en AFN", run("dsts(model.states[0].id,'b').map(nameOf)"), ["q0","q1"]);
+run("toggleDelta(model.states[0].id,'b',model.states[1].id)");
+eq("y vuelve a quitarlo", run("dsts(model.states[0].id,'b').map(nameOf)"), ["q0"]);
+run("loadModel(JSON.parse(JSON.stringify(EXAMPLE))); toggleDelta(model.states[0].id,'b',model.states[1].id)");
+eq("en AFD toggleDelta reasigna, no acumula", run("dsts(model.states[0].id,'b').map(nameOf)"), ["q1"]);
+
+console.log("\n=== 21b. Validación en modo AFN ===");
+run("loadModel(JSON.parse(JSON.stringify(EXAMPLE_NFA)))");
+eq("0 errores", run("analyze().errs"), 0);
+eq("0 avisos", run("analyze().warns"), 0);
+check("dice que es un AFN válido", run("analyze().issues[0].html").includes("AFN válido"));
+check("informa del no determinismo sin llamarlo error",
+      run("analyze().issues.map(i=>i.lv+':'+i.html).join()").includes("info:") &&
+      run("analyze().issues.map(i=>i.html).join()").includes("no deterministas"));
+check("δ(q,a) = ∅ no es un defecto en AFN",
+      run("analyze().issues.map(i=>i.html).join()").includes("no</b> es un defecto"));
+check("hay pares sin destino (que en AFD serían error)", run("missingPairs().length") > 0);
+// El mismo autómata declarado AFD sí debe protestar.
+run("model.kind='dfa'");
+check("el mismo δ en modo AFD da error de determinismo",
+      run("analyze().issues.map(i=>i.html).join()").includes("No es determinista"));
+run("model.kind='nfa'");
+
+console.log("\n=== 22. Simulación de un AFN (ramas y ε) ===");
+run("loadModel(JSON.parse(JSON.stringify(EXAMPLE_NFA)))");
+eq("ab    → acepta", sim("ab"), "accept");
+eq("aab   → acepta", sim("aab"), "accept");
+eq("bbab  → acepta", sim("bbab"), "accept");
+eq("aba   → rechaza", sim("aba"), "reject");
+eq("b     → rechaza", sim("b"), "reject");
+eq("ε     → rechaza", sim(""), "reject");
+eq("la traza lleva conjuntos",
+   run("runTokens(tokenize('aab').tokens).steps.map(s=>setLabel(s.to))"),
+   ["{q0, q1}","{q0, q1}","{q0, q2}"]);
+run(`loadModel({kind:'nfa',alphabet:['a'],initial:'s1',
+  states:[{id:'s1',name:'q0',x:0,y:0,accepting:false},{id:'s2',name:'q1',x:200,y:0,accepting:true}],
+  delta:{s1:{'ε':['s2']}}})`);
+eq("la ε-clausura del inicial arrastra q1", run("closureOf([model.initial]).map(nameOf)"), ["q0","q1"]);
+eq("ε se acepta por la transición vacía", sim(""), "accept");
+eq("«a» bloquea todas las ramas", sim("a"), "blocked");
+eq("1 transición ε detectada", run("epsTransitions().length"), 1);
+
+console.log("\n=== 23. Sintaxis de la expresión regular ===");
+const RP = (r, alpha, plusUnion) => run(`reParse(${JSON.stringify(r)}, ${JSON.stringify(alpha||["a","b"])}, ${plusUnion === undefined ? true : plusUnion})`);
+check("(a|b)*ab es válida", RP("(a|b)*ab").ok);
+eq("la raíz es una concatenación", RP("(a|b)*ab").ast.t, "cat");
+eq("precedencia: ab|c = (ab)|c", [RP("ab|c",["a","b","c"]).ast.t, RP("ab|c",["a","b","c"]).ast.a.t], ["alt","cat"]);
+eq("precedencia: ab* = a(b*)", RP("ab*").ast.b.t, "star");
+check("paréntesis sin cerrar ⇒ error", RP("(ab").ok === false);
+check("«*» sin operando ⇒ error", RP("*a").ok === false);
+check("«|» sin operando ⇒ error", RP("a|").ok === false);
+check("expresión vacía ⇒ error, no excepción", RP("").ok === false);
+check("basura no cuelga el parser", RP("))((").errors.length > 0);
+eq("símbolo fuera de Σ: se avisa pero se acepta", RP("abc").extra, ["c"]);
+check("ε y ∅ se reconocen", RP("ε|∅").ok);
+eq("«+» como unión", RP("a+b", ["a","b"], true).ast.t, "alt");
+eq("«+» como clausura positiva", RP("a+", ["a","b"], false).ast.t, "plus");
+eq("comillas para un símbolo que choca con un operador",
+   RP("'+'", ["+"], true).ast, { t:"sym", v:"+" });
+eq("símbolos multicarácter por coincidencia más larga",
+   RP("ab", ["a","ab"], true).ast, { t:"sym", v:"ab" });
+
+console.log("\n=== 24. Kleene/Thompson y equivalencia ===");
+const reAcc = (r, w, alpha, plusUnion) => run(`(()=>{
+  const A = ${JSON.stringify(alpha || ["a","b"])};
+  const pr = reParse(${JSON.stringify(r)}, A, ${plusUnion === undefined ? true : plusUnion});
+  if(!pr.ok) return "ERROR: " + pr.errors[0];
+  const D = determinize(thompson(pr.ast), A);
+  let i = D.start;
+  for(const c of ${JSON.stringify(w)}) i = D.trans[i].get(c);
+  return D.accept.has(i);
+})()`);
+eq("(a|b)*ab acepta «ab»",  reAcc("(a|b)*ab","ab"),  true);
+eq("(a|b)*ab acepta «bbab»",reAcc("(a|b)*ab","bbab"),true);
+eq("(a|b)*ab rechaza «aba»",reAcc("(a|b)*ab","aba"), false);
+eq("(a|b)*ab rechaza ε",    reAcc("(a|b)*ab",""),    false);
+eq("a* acepta ε",           reAcc("a*",""),          true);
+eq("a* acepta «aaa»",       reAcc("a*","aaa"),       true);
+eq("a⁺ rechaza ε",          reAcc("a+","", ["a","b"], false), false);
+eq("a⁺ acepta «a»",         reAcc("a+","a",["a","b"], false), true);
+eq("a? acepta ε y «a»", [reAcc("a?",""), reAcc("a?","a")], [true,true]);
+eq("a? rechaza «aa»",       reAcc("a?","aa"),        false);
+eq("∅ no acepta ni ε",      reAcc("∅",""),           false);
+eq("ε acepta sólo la cadena vacía", [reAcc("ε",""), reAcc("ε","a")], [true,false]);
+eq("(ab)* acepta «abab»",   reAcc("(ab)*","abab"),   true);
+eq("(ab)* rechaza «aba»",   reAcc("(ab)*","aba"),    false);
+
+console.log("\n=== 24b. Veredicto sobre el autómata del lienzo ===");
+run("loadModel(JSON.parse(JSON.stringify(EXAMPLE_NFA)))");
+eq("AFN «termina en ab» ≡ (a|b)*ab", run("regexReport().state"), "ok");
+run("model.regex='r = (a|b)*ab'");
+eq("se admite el prefijo «r = » de los apuntes", run("regexReport().state"), "ok");
+run("model.regex='(a|b)*ba'");
+const dif = run("regexReport()");
+eq("con (a|b)*ba ya no coinciden", dif.state, "diff");
+eq("el contraejemplo tiene longitud 2", dif.word.length, 2);
+check("y está en un lado sólo", dif.inM !== dif.inR);
+run("loadModel(JSON.parse(JSON.stringify(EXAMPLE))); model.regex='b*(ab*ab*)*'; model.regexPlus='union'");
+eq("AFD «nº par de a» ≡ b*(ab*ab*)*", run("regexReport().state"), "ok");
+run("model.regex='(bb)*'");
+const dif2 = run("regexReport()");
+eq("con (bb)* el contraejemplo más corto es «b»", dif2.word.join(""), "b");
+eq("«b» lo acepta el autómata pero no la expresión: falso positivo",
+   [dif2.inM, dif2.inR], [true, false]);
+run("model.regex='(a|b'");
+eq("expresión mal escrita ⇒ estado de error", run("regexReport().state"), "error");
+run("model.regex='c*'");
+check("símbolo fuera de Σ ⇒ se avisa", run("regexReport().warns").join().includes("no están en Σ"));
+run("model.regex=''");
+eq("sin expresión ⇒ sin veredicto", run("regexReport().state"), "empty");
+try{ run("renderRegex()"); check("renderRegex() no lanza", true); }
+catch(e){ check("renderRegex() no lanza", false, e.message); }
+
+console.log("\n=== 25. Regex → AFN en el lienzo (Kleene) y determinización ===");
+run("model.states=[]; model.delta={}; model.initial=null; model.regex='(a|b)*ab'; model.regexPlus='union'; regexToNfa()");
+eq("el autómata construido está en modo AFN", run("model.kind"), "nfa");
+check("usa transiciones ε (es Thompson)", run("epsTransitions().length") > 0);
+check("un único estado de aceptación", run("model.states.filter(s=>s.accepting).length") === 1);
+eq("por construcción, L(M) = L(r)", run("regexReport().state"), "ok");
+eq("y simula bien: «ab» acepta", sim("ab"), "accept");
+eq("«aba» rechaza", sim("aba"), "reject");
+check("los estados no se solapan (capas por distancia)", run(
+  "model.states.every((s,i)=>model.states.every((t,j)=>i===j||Math.hypot(s.x-t.x,s.y-t.y)>2*R))"));
+run("determinizeModel()");
+eq("tras determinizar, modo AFD", run("model.kind"), "dfa");
+eq("δ es total", run("missingPairs().length"), 0);
+eq("0 errores de validación", run("analyze().errs"), 0);
+eq("el AFD sigue siendo equivalente a la expresión", run("regexReport().state"), "ok");
+eq("«bbab» acepta", sim("bbab"), "accept");
+eq("«ba» rechaza", sim("ba"), "reject");
+check("los subconjuntos se nombran con sus miembros",
+      run("model.states.some(s=>s.name.startsWith('{'))"));
+
+console.log("\n=== 26. Persistencia del AFN ===");
+run("loadModel(JSON.parse(JSON.stringify(EXAMPLE_NFA))); save()");
+run("loadModel(JSON.parse(localStorage.getItem(STORE_KEY)))");
+eq("el modo sobrevive al JSON", run("model.kind"), "nfa");
+eq("δ se serializa anidada con conjuntos", run("serializeModel().delta"),
+   { s1:{ a:["s1","s2"], b:["s1"] }, s2:{ b:["s3"] } });
+eq("la regex y el papel de «+» sobreviven", [run("model.regex"), run("model.regexPlus")],
+   ["(a|b)*ab", "union"]);
+eq("δ(q0,a) sigue teniendo 2 destinos", run("dsts(model.states[0].id,'a').length"), 2);
+run(`loadModel({kind:'dfa',alphabet:['a'],initial:'s1',
+  states:[{id:'s1',name:'q0',x:0,y:0,accepting:true},{id:'s2',name:'q1',x:100,y:0,accepting:false}],
+  delta:{s1:{a:['s1','s2'],'ε':['s2']}}})`);
+eq("un AFN cargado como AFD conserva un solo destino", run("dsts('s1','a').length"), 1);
+eq("y pierde la transición ε", run("epsTransitions().length"), 0);
+eq("ε nunca entra en Σ al cargar",
+   run("(()=>{loadModel({kind:'nfa',alphabet:['a','ε'],states:[{id:'s1',name:'q0',x:0,y:0,accepting:true}],initial:'s1',delta:{}});return model.alphabet;})()"),
+   ["a"]);
+
+console.log("\n=== 27. Quíntupla en modo AFN ===");
+const PN = txt => run(`parseQuintuple(${JSON.stringify(txt)}, "nfa")`);
+const pn1 = PN("Q={q0,q1,q2}\nΣ={a,b}\nq0=q0\nF={q2}\nδ(q0,a)={q0,q1}\nδ(q0,b)=q0\nδ(q1,b)=q2");
+eq("AFN: la quíntupla se lee sin errores", pn1.errors, []);
+eq("δ(q0,a) = {q0,q1} da 2 transiciones", pn1.spec.delta.length, 4);
+check("δ parcial no se avisa en AFN", !pn1.warns.join().includes("parcial"));
+eq("el spec recuerda el modo", pn1.spec.kind, "nfa");
+const pn2 = PN("Q={A,B}\nΣ={a}\nq0=A\nF={B}\nδ(A,ε)=B\nδ(A,a)=A");
+eq("AFN: acepta transiciones ε", pn2.errors, []);
+check("la ε no se cuela en Σ", pn2.spec.S.includes("ε") === false);
+check("Σ = {a, ε} ⇒ aviso y se limpia",
+      PN("Q={A}\nΣ={a,ε}\nq0=A\nF={}\nδ(A,a)=A").warns.join().includes("ε"));
+check("en modo AFD la ε sigue siendo un error",
+      run(`parseQuintuple("Q={A,B}\\nΣ={a}\\nq0=A\\nF={B}\\nδ(A,ε)=B", "dfa")`).errors.join().includes("ε"));
+const pn3 = PN("δ    | a       | b\n->q0 | {q0,q1} | q0\n*q1  | ∅       | q1");
+eq("tabla con conjuntos y ∅: sin errores", pn3.errors, []);
+eq("tabla: 4 transiciones", pn3.spec.delta.length, 4);
+run(`loadModel(modelFromSpec(parseQuintuple("Q={q0,q1}\\nΣ={a}\\nq0=q0\\nF={q1}\\nδ(q0,a)={q0,q1}", "nfa").spec))`);
+eq("el modelo generado está en modo AFN", run("model.kind"), "nfa");
+eq("y δ(q0,a) tiene 2 destinos", run("dsts(model.states[0].id,'a').length"), 2);
+eq("el volcado del AFN se vuelve a parsear sin errores",
+   run(`parseQuintuple(tupleFromModel(), "nfa").errors`), []);
+eq("ida y vuelta: mismo número de transiciones",
+   run(`parseQuintuple(tupleFromModel(), "nfa").spec.delta.length`), 2);
 
 console.log(`\n──────────────────────────────\n  ${pass} correctas, ${fail} fallidas\n──────────────────────────────`);
 process.exit(fail ? 1 : 0);
